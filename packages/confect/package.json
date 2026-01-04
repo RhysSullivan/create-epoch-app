@@ -5,10 +5,12 @@
 	"type": "module",
 	"exports": {
 		"./server": "./src/server/index.ts",
-		"./react": "./src/react/index.ts"
+		"./react": "./src/react/index.ts",
+		"./client": "./src/client/index.ts"
 	},
 	"dependencies": {
 		"@effect/platform": "catalog:",
+		"@effect-atom/atom": "catalog:",
 		"convex": "catalog:",
 		"effect": "catalog:"
 	},

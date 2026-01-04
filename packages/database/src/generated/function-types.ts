@@ -2,6 +2,8 @@
 // DO NOT EDIT MANUALLY
 
 export const FUNCTION_TYPE_MAP = {
+  "guestbook.add": "mutation",
+  "guestbook.list": "query",
   "posts.getByAuthor": "query",
   "posts.getById": "query",
   "posts.listPublished": "query",
@@ -12,9 +14,10 @@ export const FUNCTION_TYPE_MAP = {
   "users.upsertUser": "mutation"
 } as const;
 
-export const NAMESPACES = ["posts","users"] as const;
+export const NAMESPACES = ["guestbook","posts","users"] as const;
 
 export const NAMESPACE_STRUCTURE = {
+  "guestbook": ["add","list"],
   "posts": ["getByAuthor","getById","listPublished","publish","upsertPost"],
   "users": ["getByEmail","list","upsertUser"]
 } as const;

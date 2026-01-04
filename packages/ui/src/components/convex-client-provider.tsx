@@ -1,17 +1,27 @@
 "use client";
 
+import { Atom, RegistryProvider } from "@effect-atom/atom-react";
+import {
+	ConvexClient,
+	type ConvexClientService,
+} from "@packages/confect/client";
 import { convexClient } from "@convex-dev/better-auth/client/plugins";
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { anonymousClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
-import { ConvexProvider, ConvexReactClient } from "convex/react";
-import { ConvexQueryCacheProvider } from "convex-helpers/react/cache/provider";
+import { ConvexClient as ConvexBrowserClient } from "convex/browser";
+import type { FunctionReference, FunctionReturnType } from "convex/server";
+import { Effect, Layer, Stream } from "effect";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
-const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!, {
-	expectAuth: false,
-	unsavedChangesWarning: false,
-});
+const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL!;
+
+const convexBrowserClient = new ConvexBrowserClient(CONVEX_URL);
+
+const convexClientWithClearAuth = {
+	setAuth: convexBrowserClient.setAuth.bind(convexBrowserClient),
+	clearAuth: () => convexBrowserClient.client.clearAuth(),
+};
 
 const authClient = createAuthClient({
 	plugins: [anonymousClient(), convexClient()],
@@ -21,10 +31,52 @@ type AuthClient = typeof authClient;
 
 const AuthClientContext = createContext<AuthClient | null>(null);
 
+const convexClientService: ConvexClientService = {
+	query: <Query extends FunctionReference<"query">>(
+		query: Query,
+		args: Query["_args"],
+	): Effect.Effect<FunctionReturnType<Query>> =>
+		Effect.promise(() => convexBrowserClient.query(query, args)),
+
+	mutation: <Mutation extends FunctionReference<"mutation">>(
+		mutation: Mutation,
+		args: Mutation["_args"],
+	): Effect.Effect<FunctionReturnType<Mutation>> =>
+		Effect.promise(() => convexBrowserClient.mutation(mutation, args)),
+
+	action: <Action extends FunctionReference<"action">>(
+		action: Action,
+		args: Action["_args"],
+	): Effect.Effect<FunctionReturnType<Action>> =>
+		Effect.promise(() => convexBrowserClient.action(action, args)),
+
+	subscribe: <Query extends FunctionReference<"query">>(
+		query: Query,
+		args: Query["_args"],
+	): Stream.Stream<FunctionReturnType<Query>> =>
+		Stream.async((emit) => {
+			const unsubscribe = convexBrowserClient.onUpdate(
+				query,
+				args,
+				(result) => {
+					emit.single(result);
+				},
+			);
+			return Effect.sync(() => unsubscribe());
+		}),
+};
+
+const AppConvexClientLayer = Layer.succeed(ConvexClient, convexClientService);
+
+export const atomRuntime = Atom.runtime(AppConvexClientLayer);
+
 function AuthClientProvider({ children }: { children: ReactNode }) {
 	return (
 		<AuthClientContext.Provider value={authClient}>
-			<ConvexBetterAuthProvider client={convex} authClient={authClient}>
+			<ConvexBetterAuthProvider
+				client={convexClientWithClearAuth}
+				authClient={authClient}
+			>
 				{children}
 			</ConvexBetterAuthProvider>
 		</AuthClientContext.Provider>
@@ -64,10 +116,8 @@ export const useNonAnonymousSession = () => {
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
 	return (
-		<ConvexProvider client={convex}>
-			<ConvexQueryCacheProvider>
-				<AuthClientProvider>{children}</AuthClientProvider>
-			</ConvexQueryCacheProvider>
-		</ConvexProvider>
+		<RegistryProvider>
+			<AuthClientProvider>{children}</AuthClientProvider>
+		</RegistryProvider>
 	);
 }

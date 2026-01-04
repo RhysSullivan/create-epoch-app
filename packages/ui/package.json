@@ -12,6 +12,10 @@
 	},
 	"dependencies": {
 		"@convex-dev/better-auth": "catalog:",
+		"@effect-atom/atom": "catalog:",
+		"@effect-atom/atom-react": "catalog:",
+		"@packages/confect": "workspace:*",
+		"effect": "catalog:",
 
 		"@radix-ui/react-accordion": "^1.2.12",
 		"@radix-ui/react-alert-dialog": "^1.1.15",

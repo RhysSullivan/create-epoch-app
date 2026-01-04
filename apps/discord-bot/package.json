@@ -13,6 +13,7 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
+		"@packages/confect": "workspace:*",
 		"@packages/observability": "workspace:*",
 		"@packages/reacord": "workspace:*",
 		"discord.js": "^14.25.1",

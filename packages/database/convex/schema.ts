@@ -17,19 +17,27 @@ const PostSchema = Schema.Struct({
 	published: Schema.Boolean,
 });
 
+const GuestbookEntrySchema = Schema.Struct({
+	name: Schema.String,
+	message: Schema.String,
+});
+
 export const confectSchema = defineSchema({
 	users: defineTable(UserSchema).index("by_email", ["email"]),
 	posts: defineTable(PostSchema)
 		.index("by_authorId", ["authorId"])
 		.index("by_published", ["published"]),
+	guestbook: defineTable(GuestbookEntrySchema),
 });
 
 export default confectSchema.convexSchemaDefinition;
 
-export { UserSchema, PostSchema };
+export { UserSchema, PostSchema, GuestbookEntrySchema };
 
 export const userSchema = compileSchema(UserSchema);
 export const postSchema = compileSchema(PostSchema);
+export const guestbookEntrySchema = compileSchema(GuestbookEntrySchema);
 
 export type User = Schema.Schema.Type<typeof UserSchema>;
 export type Post = Schema.Schema.Type<typeof PostSchema>;
+export type GuestbookEntry = Schema.Schema.Type<typeof GuestbookEntrySchema>;
