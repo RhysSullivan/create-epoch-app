@@ -61,11 +61,24 @@
         "postcss": "catalog:",
       },
     },
+    "packages/api": {
+      "name": "@packages/api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@packages/confect": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@packages/typescript-config": "workspace:*",
+        "typescript": "catalog:",
+      },
+    },
     "packages/confect": {
       "name": "@packages/confect",
       "version": "1.0.0",
       "dependencies": {
         "@effect-atom/atom": "catalog:",
+        "@effect-atom/atom-react": "catalog:",
         "@effect/platform": "catalog:",
         "convex": "catalog:",
         "effect": "catalog:",
@@ -97,6 +110,7 @@
         "@convex-dev/migrations": "^0.3.1",
         "@convex-dev/rate-limiter": "^0.3.2",
         "@effect-atom/atom": "catalog:",
+        "@packages/api": "workspace:*",
         "@packages/confect": "workspace:*",
         "better-auth": "catalog:",
         "convex": "catalog:",
@@ -160,6 +174,8 @@
       "version": "1.0.0",
       "dependencies": {
         "@effect-atom/atom": "catalog:",
+        "@effect-atom/atom-react": "catalog:",
+        "@packages/api": "workspace:*",
         "@packages/confect": "workspace:*",
         "@packages/database": "workspace:*",
         "effect": "catalog:",
@@ -701,6 +717,8 @@
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.38.0", "", {}, "sha512-kocjix+/sSggfJhwXqClZ3i9Y/MI0fp7b+g7kCRm6psy2dsf8uApTRclwG18h8Avm7C9+fnt+O36PspJ/OzoWg=="],
 
     "@opentelemetry/sql-common": ["@opentelemetry/sql-common@0.41.2", "", { "dependencies": { "@opentelemetry/core": "^2.0.0" }, "peerDependencies": { "@opentelemetry/api": "^1.1.0" } }, "sha512-4mhWm3Z8z+i508zQJ7r6Xi7y4mmoJpdvH0fZPFRkWrdp5fq7hhZ2HhYokEOLkfqSMgPR4Z9EyB3DBkbKGOqZiQ=="],
+
+    "@packages/api": ["@packages/api@workspace:packages/api"],
 
     "@packages/confect": ["@packages/confect@workspace:packages/confect"],
 

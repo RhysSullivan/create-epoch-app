@@ -1,0 +1,17 @@
+{
+	"name": "@packages/api",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./*": "./src/*.ts"
+	},
+	"dependencies": {
+		"@packages/confect": "workspace:*",
+		"effect": "catalog:"
+	},
+	"devDependencies": {
+		"@packages/typescript-config": "workspace:*",
+		"typescript": "catalog:"
+	}
+}

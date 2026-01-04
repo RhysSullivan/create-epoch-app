@@ -12,6 +12,8 @@ import {
 } from "@packages/confect/server";
 import { confectSchema } from "./schema";
 
+export { confectSchema };
+
 export const {
 	query,
 	mutation,

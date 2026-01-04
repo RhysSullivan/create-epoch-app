@@ -1,3 +1,5 @@
+import { AtomConvex, ExitResult } from "@packages/confect/client";
+import { api } from "@packages/database/convex/_generated/api";
 import {
 	ActionRow,
 	Button,
@@ -7,12 +9,18 @@ import {
 	useAtomSet,
 	useAtomValue,
 } from "@packages/reacord";
-import { createGuestbookAtoms } from "@packages/react/guestbook";
-import { atomRuntime } from "../core/atom-runtime";
 import { Cause } from "effect";
 import { useState } from "react";
 
-const { entriesAtom, addEntryAtom } = createGuestbookAtoms(atomRuntime);
+class GuestbookClient extends AtomConvex.Tag<GuestbookClient>()(
+	"GuestbookClient",
+	{
+		url: process.env.CONVEPUBLIC_X_URL ?? "",
+	},
+) {}
+
+const entriesAtom = GuestbookClient.subscription(api.public.guestbook.list, {});
+const addEntryAtom = GuestbookClient.mutation(api.public.guestbook.add);
 
 export function GuestbookCommand() {
 	const result = useAtomValue(entriesAtom);

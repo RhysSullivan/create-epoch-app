@@ -3,6 +3,7 @@
 	"references": [
 		{ "path": "apps/discord-bot" },
 		{ "path": "apps/main-site" },
+		{ "path": "packages/api" },
 		{ "path": "packages/database" },
 		{ "path": "packages/database-utils" },
 		{ "path": "packages/discord-api" },

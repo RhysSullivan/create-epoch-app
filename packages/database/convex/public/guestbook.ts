@@ -50,7 +50,7 @@ export const add = mutation({
 			const message = args.message.trim().slice(0, 500);
 
 			if (name.length === 0 || message.length === 0) {
-				return yield* new ValidationError({
+				yield* new ValidationError({
 					message: "Name and message are required",
 				});
 			}

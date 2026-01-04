@@ -6,11 +6,13 @@
 	"exports": {
 		"./server": "./src/server/index.ts",
 		"./react": "./src/react/index.ts",
-		"./client": "./src/client/index.ts"
+		"./client": "./src/client/index.ts",
+		"./rpc": "./src/rpc/index.ts"
 	},
 	"dependencies": {
 		"@effect/platform": "catalog:",
 		"@effect-atom/atom": "catalog:",
+		"@effect-atom/atom-react": "catalog:",
 		"convex": "catalog:",
 		"effect": "catalog:"
 	},

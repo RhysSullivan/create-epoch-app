@@ -31,6 +31,7 @@
 		"@effect-atom/atom": "catalog:",
 		"@convex-dev/migrations": "^0.3.1",
 		"@convex-dev/rate-limiter": "^0.3.2",
+		"@packages/api": "workspace:*",
 		"@packages/confect": "workspace:*",
 		"better-auth": "catalog:",
 		"convex": "catalog:",

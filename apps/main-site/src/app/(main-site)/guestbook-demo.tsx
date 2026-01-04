@@ -1,28 +1,44 @@
 "use client";
 
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react";
+import { ExitResult } from "@packages/confect/client";
 import { entriesAtom, addEntryAtom, Result } from "@packages/react/guestbook";
 import { Button } from "@packages/ui/components/button";
 import { Input } from "@packages/ui/components/input";
-import { Cause } from "effect";
+import { Cause, Exit } from "effect";
 import { useState } from "react";
 
 export function GuestbookDemo() {
 	const result = useAtomValue(entriesAtom);
-	const addEntry = useAtomSet(addEntryAtom);
+	const addEntry = useAtomSet(addEntryAtom, { mode: "promiseExit" });
 	const [name, setName] = useState("");
 	const [message, setMessage] = useState("");
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!name.trim() || !message.trim() || isSubmitting) return;
 
 		setIsSubmitting(true);
+		setError(null);
 		try {
-			await addEntry({ name: name.trim(), message: message.trim() });
-			setName("");
-			setMessage("");
+			const clientExit = await addEntry({
+				name: name.trim(),
+				message: message.trim(),
+			});
+			if (Exit.isSuccess(clientExit)) {
+				const serverExit = clientExit.value;
+				if (ExitResult.isSuccess(serverExit)) {
+					setName("");
+					setMessage("");
+				} else {
+					const failure = ExitResult.getFailureOrNull(serverExit);
+					if (failure) {
+						setError(failure.message);
+					}
+				}
+			}
 		} finally {
 			setIsSubmitting(false);
 		}
