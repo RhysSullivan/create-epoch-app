@@ -6,19 +6,3 @@ export {
 	makeConvexHttpClient,
 	type ConvexClientService,
 } from "./convex-client";
-
-export {
-	convexAction,
-	convexActionAtom,
-	convexMutation,
-	convexMutationAtom,
-	convexQuery,
-	convexQueryAtom,
-	convexSubscribe,
-	convexSubscriptionAtom,
-	type ConvexQueryAtomOptions,
-} from "./convex-atom";
-
-export * as ExitResult from "./exit";
-
-export * as AtomConvex from "./AtomConvex";

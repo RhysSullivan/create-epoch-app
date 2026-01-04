@@ -1,6 +1,7 @@
+import { useAtomValue, useAtom } from "@effect-atom/atom-react";
 import { GuestbookRpcs } from "@packages/api/guestbook";
 import type { AuthPayload } from "@packages/api/shared";
-import { RpcClient, useQuery, useMutation } from "@packages/confect/rpc";
+import { RpcClient } from "@packages/confect/rpc";
 import { api } from "@packages/database/convex/_generated/api";
 
 const guestbookClient = RpcClient.makeWithShared<
@@ -14,8 +15,8 @@ const guestbookClient = RpcClient.makeWithShared<
 	() => ({ privateAccessKey: process.env.PRIVATE_ACCESS_KEY ?? "" }),
 );
 
-export const useGuestbookList = () => useQuery(guestbookClient.list({}));
+export const useGuestbookList = () => useAtomValue(guestbookClient.list({}));
 
-export const useGuestbookAdd = () => useMutation(guestbookClient.add);
+export const useGuestbookAdd = () => useAtom(guestbookClient.add);
 
 export { guestbookClient };

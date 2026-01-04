@@ -12,7 +12,6 @@ import type * as confect from "../confect.js";
 import type * as http from "../http.js";
 import type * as private_posts from "../private/posts.js";
 import type * as private_users from "../private/users.js";
-import type * as public_guestbook from "../public/guestbook.js";
 import type * as public_posts from "../public/posts.js";
 import type * as public_users from "../public/users.js";
 import type * as rpc_guestbook from "../rpc/guestbook.js";
@@ -36,7 +35,6 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "private/posts": typeof private_posts;
   "private/users": typeof private_users;
-  "public/guestbook": typeof public_guestbook;
   "public/posts": typeof public_posts;
   "public/users": typeof public_users;
   "rpc/guestbook": typeof rpc_guestbook;
