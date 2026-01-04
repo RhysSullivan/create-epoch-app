@@ -1,7 +1,8 @@
 import { getManyFrom, getOneFrom } from "convex-helpers/server/relationships";
-import type { MutationCtx, QueryCtx } from "../client";
+import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
+import type { DataModel } from "../_generated/dataModel";
 
-type BaseCtx = QueryCtx | MutationCtx;
+type BaseCtx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>;
 
 function createRequestCache() {
 	const cache = new Map<string, Promise<never>>();
@@ -19,7 +20,7 @@ function createRequestCache() {
 	};
 }
 
-export function createDataAccessCache(ctx: QueryCtx) {
+export function createDataAccessCache(ctx: BaseCtx) {
 	const cache = createRequestCache();
 
 	return {

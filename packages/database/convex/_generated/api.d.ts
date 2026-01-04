@@ -8,13 +8,10 @@
  * @module
  */
 
-import type * as client_index from "../client/index.js";
-import type * as client_private from "../client/private.js";
 import type * as confect from "../confect.js";
 import type * as http from "../http.js";
 import type * as private_posts from "../private/posts.js";
 import type * as private_users from "../private/users.js";
-import type * as public_custom_functions from "../public/custom_functions.js";
 import type * as public_guestbook from "../public/guestbook.js";
 import type * as public_posts from "../public/posts.js";
 import type * as public_users from "../public/users.js";
@@ -34,13 +31,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "client/index": typeof client_index;
-  "client/private": typeof client_private;
   confect: typeof confect;
   http: typeof http;
   "private/posts": typeof private_posts;
   "private/users": typeof private_users;
-  "public/custom_functions": typeof public_custom_functions;
   "public/guestbook": typeof public_guestbook;
   "public/posts": typeof public_posts;
   "public/users": typeof public_users;

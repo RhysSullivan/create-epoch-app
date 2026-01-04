@@ -1,90 +1,114 @@
-import { v } from "convex/values";
+import { Effect, Option, Schema } from "effect";
+import { Id } from "@packages/confect/server";
 import {
+	ConfectMutationCtx,
+	ConfectQueryCtx,
 	internalMutation,
 	internalQuery,
-	privateMutation,
-	privateQuery,
-} from "../client";
+} from "../confect";
+
+const UserWithSystemFields = Schema.Struct({
+	_id: Schema.String,
+	_creationTime: Schema.Number,
+	name: Schema.String,
+	email: Schema.String,
+});
 
 export const create = internalMutation({
-	args: {
-		name: v.string(),
-		email: v.string(),
-	},
-	returns: v.id("users"),
-	handler: async (ctx, args) => {
-		return await ctx.db.insert("users", args);
-	},
+	args: Schema.Struct({
+		name: Schema.String,
+		email: Schema.String,
+	}),
+	returns: Schema.String,
+	handler: (args) =>
+		Effect.gen(function* () {
+			const ctx = yield* ConfectMutationCtx;
+			const id = yield* ctx.db.insert("users", args).pipe(Effect.orDie);
+			return id;
+		}),
 });
 
 export const update = internalMutation({
-	args: {
-		id: v.id("users"),
-		name: v.optional(v.string()),
-		email: v.optional(v.string()),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const { id, ...updates } = args;
-		await ctx.db.patch(id, updates);
-		return null;
-	},
+	args: Schema.Struct({
+		id: Id.Id("users"),
+		name: Schema.optional(Schema.String),
+		email: Schema.optional(Schema.String),
+	}),
+	returns: Schema.Null,
+	handler: (args) =>
+		Effect.gen(function* () {
+			const ctx = yield* ConfectMutationCtx;
+			const { id, ...updates } = args;
+			yield* ctx.db.patch(id, updates).pipe(Effect.orDie);
+			return null;
+		}),
 });
 
 export const deleteUser = internalMutation({
-	args: { id: v.id("users") },
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		await ctx.db.delete(args.id);
-		return null;
-	},
-});
-
-export const getByEmail = privateQuery({
-	args: { email: v.string() },
-	handler: async (ctx, args) => {
-		return await ctx.db
-			.query("users")
-			.withIndex("by_email", (q) => q.eq("email", args.email))
-			.unique();
-	},
-});
-
-export const getByEmailInternal = internalQuery({
-	args: { email: v.string() },
-	returns: v.union(
-		v.object({
-			_id: v.id("users"),
-			_creationTime: v.number(),
-			name: v.string(),
-			email: v.string(),
+	args: Schema.Struct({ id: Id.Id("users") }),
+	returns: Schema.Null,
+	handler: (args) =>
+		Effect.gen(function* () {
+			const ctx = yield* ConfectMutationCtx;
+			yield* ctx.db.delete(args.id);
+			return null;
 		}),
-		v.null(),
-	),
-	handler: async (ctx, args) => {
-		return await ctx.db
-			.query("users")
-			.withIndex("by_email", (q) => q.eq("email", args.email))
-			.unique();
-	},
 });
 
-export const upsertUser = privateMutation({
-	args: {
-		name: v.string(),
-		email: v.string(),
-	},
-	handler: async (ctx, args) => {
-		const existing = await ctx.db
-			.query("users")
-			.withIndex("by_email", (q) => q.eq("email", args.email))
-			.unique();
+export const getByEmail = internalQuery({
+	args: Schema.Struct({ email: Schema.String }),
+	returns: Schema.NullOr(UserWithSystemFields),
+	handler: (args) =>
+		Effect.gen(function* () {
+			const ctx = yield* ConfectQueryCtx;
+			const user = yield* ctx.db
+				.query("users")
+				.withIndex("by_email", (q) => q.eq("email", args.email))
+				.unique()
+				.pipe(Effect.orDie);
+			return Option.match(user, {
+				onNone: () => null,
+				onSome: (u) => ({
+					_id: u._id,
+					_creationTime: u._creationTime,
+					name: u.name,
+					email: u.email,
+				}),
+			});
+		}),
+});
 
-		if (existing) {
-			await ctx.db.patch(existing._id, { name: args.name });
-			return { isNew: false, id: existing._id };
-		}
-		const id = await ctx.db.insert("users", args);
-		return { isNew: true, id };
-	},
+export const upsert = internalMutation({
+	args: Schema.Struct({
+		name: Schema.String,
+		email: Schema.String,
+	}),
+	returns: Schema.Struct({
+		isNew: Schema.Boolean,
+		id: Schema.String,
+	}),
+	handler: (args) =>
+		Effect.gen(function* () {
+			const ctx = yield* ConfectMutationCtx;
+			const existing = yield* ctx.db
+				.query("users")
+				.withIndex("by_email", (q) => q.eq("email", args.email))
+				.unique()
+				.pipe(Effect.orDie);
+
+			return yield* Option.match(existing, {
+				onNone: () =>
+					Effect.gen(function* () {
+						const id = yield* ctx.db.insert("users", args).pipe(Effect.orDie);
+						return { isNew: true, id };
+					}),
+				onSome: (user) =>
+					Effect.gen(function* () {
+						yield* ctx.db
+							.patch(user._id, { name: args.name })
+							.pipe(Effect.orDie);
+						return { isNew: false, id: user._id };
+					}),
+			});
+		}),
 });

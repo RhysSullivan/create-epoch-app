@@ -1,13 +1,13 @@
+import type { GenericCtx } from "@convex-dev/better-auth";
 import type { UserIdentity } from "convex/server";
-import type { ActionCtx, MutationCtx, QueryCtx } from "../client";
+import type { DataModel } from "../_generated/dataModel";
 
 type AuthIdentity = UserIdentity & {
-	// comes from the better-auth plugin
 	isAnonymous: boolean;
 };
 
 export async function getAuthIdentity(
-	ctx: QueryCtx | MutationCtx | ActionCtx,
+	ctx: GenericCtx<DataModel>,
 ): Promise<AuthIdentity | null> {
 	return ctx.auth.getUserIdentity() as Promise<AuthIdentity | null>;
 }
