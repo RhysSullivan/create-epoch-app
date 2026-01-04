@@ -1,0 +1,38 @@
+{
+	"name": "@packages/discord-bot",
+	"module": "index.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "NODE_ENV=development bun run --env-file=../../.env --watch index.dev.ts",
+		"start": "bun run --env-file=../../.env index.ts",
+		"typecheck": "tsgo -p tsconfig.json --noEmit",
+		"typecheck:slow": "tsc -p tsconfig.json --noEmit",
+		"clean": "rm -rf node_modules .turbo",
+		"test": "vitest run --no-watch --pool=forks",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@effect/cluster": "catalog:",
+		"@effect/platform-node": "catalog:",
+		"@packages/database": "workspace:*",
+		"@packages/database-utils": "workspace:*",
+		"@packages/observability": "workspace:*",
+		"@packages/reacord": "workspace:*",
+		"@packages/ui": "workspace:*",
+		"@sentry/node": "^10.30.0",
+		"@sentry/profiling-node": "^10.30.0",
+		"discord.js": "^14.25.1",
+		"effect": "catalog:",
+		"posthog-node": "^4.2.0",
+		"react": "^19.1.0"
+	},
+	"devDependencies": {
+		"@effect/language-service": "catalog:",
+		"@effect/vitest": "catalog:",
+		"@packages/typescript-config": "workspace:*",
+		"@types/bun": "latest",
+		"@types/react": "catalog:",
+		"vitest": "catalog:"
+	}
+}

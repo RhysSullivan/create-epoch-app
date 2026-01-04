@@ -1,0 +1,10 @@
+{
+	"extends": "../typescript-config/react-library.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"noEmit": true,
+		"noUncheckedIndexedAccess": false
+	},
+	"include": ["src/**/*"],
+	"exclude": ["node_modules", "dist"]
+}

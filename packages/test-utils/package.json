@@ -1,0 +1,15 @@
+{
+	"name": "@packages/test-utils",
+	"version": "1.0.0",
+	"type": "module",
+	"exports": {
+		"./snowflakes": "./src/snowflakes.ts",
+		"./*": "./src/*.ts"
+	},
+	"dependencies": {
+		"@packages/database-utils": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "catalog:"
+	}
+}
