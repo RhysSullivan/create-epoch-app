@@ -6,10 +6,20 @@ import {
 } from "@packages/confect/client";
 import { api } from "@packages/database/convex/_generated/api";
 
+export interface GuestbookEntry {
+	_id: string;
+	_creationTime: number;
+	name: string;
+	message: string;
+}
+
 export const createGuestbookAtoms = (
 	runtime: Atom.AtomRuntime<ConvexClient>,
 ) => {
-	const entriesAtom = convexSubscriptionAtom(runtime, {
+	const entriesAtom = convexSubscriptionAtom<
+		typeof api.public.guestbook.list,
+		Array<GuestbookEntry>
+	>(runtime, {
 		query: api.public.guestbook.list,
 		args: {},
 	});

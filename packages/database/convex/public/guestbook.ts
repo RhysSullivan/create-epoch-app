@@ -29,12 +29,20 @@ export const list = query({
 		}),
 });
 
+export class ValidationError extends Schema.TaggedError<ValidationError>()(
+	"ValidationError",
+	{
+		message: Schema.String,
+	},
+) {}
+
 export const add = mutation({
 	args: Schema.Struct({
 		name: Schema.String,
 		message: Schema.String,
 	}),
-	returns: Schema.String,
+	success: Schema.String,
+	error: ValidationError,
 	handler: (args) =>
 		Effect.gen(function* () {
 			const ctx = yield* ConfectMutationCtx;
@@ -42,7 +50,9 @@ export const add = mutation({
 			const message = args.message.trim().slice(0, 500);
 
 			if (name.length === 0 || message.length === 0) {
-				return yield* Effect.die(new Error("Name and message are required"));
+				return yield* new ValidationError({
+					message: "Name and message are required",
+				});
 			}
 
 			const id = yield* ctx.db

@@ -13,7 +13,7 @@ import {
 	type RegisteredMutation,
 	type RegisteredQuery,
 } from "convex/server";
-import { Effect, pipe, Schema } from "effect";
+import { Effect, Exit, pipe, Schema } from "effect";
 
 import {
 	ConfectActionCtx,
@@ -95,7 +95,7 @@ export const makeFunctions = <ConfectSchema extends GenericConfectSchema>(
 		: RegisteredQuery<
 				"public",
 				ConvexArgs,
-				Promise<{ _tag: "Success"; data: ConvexReturns } | ConvexError>
+				Promise<Schema.ExitEncoded<ConvexReturns, ConvexError, unknown>>
 			> => {
 		if ("returns" in config) {
 			return queryGeneric(
@@ -209,7 +209,7 @@ export const makeFunctions = <ConfectSchema extends GenericConfectSchema>(
 		: RegisteredMutation<
 				"public",
 				ConvexValue,
-				Promise<{ _tag: "Success"; data: ConvexReturns } | ConvexError>
+				Promise<Schema.ExitEncoded<ConvexReturns, ConvexError, unknown>>
 			> => {
 		if ("returns" in config) {
 			return mutationBuilder(
@@ -323,7 +323,7 @@ export const makeFunctions = <ConfectSchema extends GenericConfectSchema>(
 		: RegisteredAction<
 				"public",
 				ConvexValue,
-				Promise<{ _tag: "Success"; data: ConvexReturns } | ConvexError>
+				Promise<Schema.ExitEncoded<ConvexReturns, ConvexError, unknown>>
 			> => {
 		if ("returns" in config) {
 			return actionGeneric(
@@ -476,19 +476,19 @@ const confectQueryFunctionWithResult = <
 		ConfectQueryCtx<ConfectDataModel>
 	>;
 }) => {
-	const successSchema = Schema.Struct({
-		_tag: Schema.Literal("Success"),
-		data: success,
+	const exitSchema = Schema.Exit({
+		success,
+		failure: error,
+		defect: Schema.Defect,
 	});
-	const resultSchema = Schema.Union(successSchema, error);
 
 	return {
 		args: compileArgsSchema(args),
-		returns: compileReturnsSchema(resultSchema),
+		returns: compileReturnsSchema(exitSchema),
 		handler: (
 			ctx: GenericQueryCtx<DataModelFromConfectDataModel<ConfectDataModel>>,
 			actualArgs: ConvexArgs,
-		): Promise<{ _tag: "Success"; data: ConvexSuccess } | ConvexError> =>
+		): Promise<Schema.ExitEncoded<ConvexSuccess, ConvexError, unknown>> =>
 			pipe(
 				actualArgs,
 				Schema.decode(args),
@@ -501,14 +501,8 @@ const confectQueryFunctionWithResult = <
 						),
 					),
 				),
-				Effect.map(
-					(data): { _tag: "Success"; data: ConfectSuccess } | ConfectError => ({
-						_tag: "Success",
-						data,
-					}),
-				),
-				Effect.catchAll((e: ConfectError) => Effect.succeed(e)),
-				Effect.andThen((result) => Schema.encodeUnknown(resultSchema)(result)),
+				Effect.exit,
+				Effect.andThen((exit) => Schema.encode(exitSchema)(exit)),
 				Effect.runPromise,
 			),
 	};
@@ -587,19 +581,19 @@ const confectMutationFunctionWithResult = <
 		ConfectMutationCtx<ConfectDataModel>
 	>;
 }) => {
-	const successSchema = Schema.Struct({
-		_tag: Schema.Literal("Success"),
-		data: success,
+	const exitSchema = Schema.Exit({
+		success,
+		failure: error,
+		defect: Schema.Defect,
 	});
-	const resultSchema = Schema.Union(successSchema, error);
 
 	return {
 		args: compileArgsSchema(args),
-		returns: compileReturnsSchema(resultSchema),
+		returns: compileReturnsSchema(exitSchema),
 		handler: (
 			ctx: GenericMutationCtx<DataModelFromConfectDataModel<ConfectDataModel>>,
 			actualArgs: ConvexValue,
-		): Promise<{ _tag: "Success"; data: ConvexSuccess } | ConvexError> =>
+		): Promise<Schema.ExitEncoded<ConvexSuccess, ConvexError, unknown>> =>
 			pipe(
 				actualArgs,
 				Schema.decode(args),
@@ -612,14 +606,8 @@ const confectMutationFunctionWithResult = <
 						),
 					),
 				),
-				Effect.map(
-					(data): { _tag: "Success"; data: ConfectSuccess } | ConfectError => ({
-						_tag: "Success",
-						data,
-					}),
-				),
-				Effect.catchAll((e: ConfectError) => Effect.succeed(e)),
-				Effect.andThen((result) => Schema.encodeUnknown(resultSchema)(result)),
+				Effect.exit,
+				Effect.andThen((exit) => Schema.encode(exitSchema)(exit)),
 				Effect.runPromise,
 			),
 	};
@@ -690,19 +678,19 @@ const confectActionFunctionWithResult = <
 		ConfectActionCtx<ConfectDataModel>
 	>;
 }) => {
-	const successSchema = Schema.Struct({
-		_tag: Schema.Literal("Success"),
-		data: success,
+	const exitSchema = Schema.Exit({
+		success,
+		failure: error,
+		defect: Schema.Defect,
 	});
-	const resultSchema = Schema.Union(successSchema, error);
 
 	return {
 		args: compileArgsSchema(args),
-		returns: compileReturnsSchema(resultSchema),
+		returns: compileReturnsSchema(exitSchema),
 		handler: (
 			ctx: GenericActionCtx<DataModelFromConfectDataModel<ConfectDataModel>>,
 			actualArgs: ConvexValue,
-		): Promise<{ _tag: "Success"; data: ConvexSuccess } | ConvexError> =>
+		): Promise<Schema.ExitEncoded<ConvexSuccess, ConvexError, unknown>> =>
 			pipe(
 				actualArgs,
 				Schema.decode(args),
@@ -715,14 +703,8 @@ const confectActionFunctionWithResult = <
 						),
 					),
 				),
-				Effect.map(
-					(data): { _tag: "Success"; data: ConfectSuccess } | ConfectError => ({
-						_tag: "Success",
-						data,
-					}),
-				),
-				Effect.catchAll((e: ConfectError) => Effect.succeed(e)),
-				Effect.andThen((result) => Schema.encodeUnknown(resultSchema)(result)),
+				Effect.exit,
+				Effect.andThen((exit) => Schema.encode(exitSchema)(exit)),
 				Effect.runPromise,
 			),
 	};

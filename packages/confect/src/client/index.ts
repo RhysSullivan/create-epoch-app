@@ -18,3 +18,5 @@ export {
 	convexSubscriptionAtom,
 	type ConvexQueryAtomOptions,
 } from "./convex-atom";
+
+export * as ExitResult from "./exit";
