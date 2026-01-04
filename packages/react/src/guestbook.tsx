@@ -1,34 +1,19 @@
-import { Atom, Result } from "@effect-atom/atom";
-import {
-	ConvexClient,
-	convexSubscriptionAtom,
-	convexMutationAtom,
-} from "@packages/confect/client";
+import { Result } from "@effect-atom/atom";
+import { AtomConvex } from "@packages/confect/client";
 import { api } from "@packages/database/convex/_generated/api";
 
-export interface GuestbookEntry {
-	_id: string;
-	_creationTime: number;
-	name: string;
-	message: string;
-}
+class GuestbookClient extends AtomConvex.Tag<GuestbookClient>()(
+	"GuestbookClient",
+	{
+		url: process.env.NEXT_PUBLIC_CONVEX_URL ?? "",
+	},
+) {}
 
-export const createGuestbookAtoms = (
-	runtime: Atom.AtomRuntime<ConvexClient>,
-) => {
-	const entriesAtom = convexSubscriptionAtom<
-		typeof api.public.guestbook.list,
-		Array<GuestbookEntry>
-	>(runtime, {
-		query: api.public.guestbook.list,
-		args: {},
-	});
+export const entriesAtom = GuestbookClient.subscription(
+	api.public.guestbook.list,
+	{},
+);
 
-	const addEntryAtom = convexMutationAtom(runtime, api.public.guestbook.add);
+export const addEntryAtom = GuestbookClient.mutation(api.public.guestbook.add);
 
-	return { entriesAtom, addEntryAtom };
-};
-
-export type GuestbookAtoms = ReturnType<typeof createGuestbookAtoms>;
-
-export { Result };
+export { Result, GuestbookClient };

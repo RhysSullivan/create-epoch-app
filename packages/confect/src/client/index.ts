@@ -20,3 +20,5 @@ export {
 } from "./convex-atom";
 
 export * as ExitResult from "./exit";
+
+export * as AtomConvex from "./AtomConvex";
