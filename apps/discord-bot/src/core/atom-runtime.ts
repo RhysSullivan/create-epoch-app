@@ -1,4 +1,3 @@
-import { DatabaseHttpLayer } from "@packages/database/database";
 import { createAxiomLayer } from "@packages/observability/axiom";
 import { createOtelLayer } from "@packages/observability/effect-otel";
 import { createSentryEffectLayer } from "@packages/observability/sentry-effect";
@@ -50,10 +49,7 @@ const ObservabilityLayer = Layer.mergeAll(
 	LoggerLayer,
 );
 
-export const PlatformLayer = Layer.mergeAll(
-	ObservabilityLayer,
-	DatabaseHttpLayer,
-);
+export const PlatformLayer = ObservabilityLayer;
 
 export const sharedMemoMap = Effect.runSync(Layer.makeMemoMap);
 

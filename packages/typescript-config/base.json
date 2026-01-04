@@ -15,11 +15,6 @@
 		"resolveJsonModule": true,
 		"skipLibCheck": true,
 		"strict": true,
-		"target": "ES2022",
-		"plugins": [
-			{
-				"name": "@effect/language-service"
-			}
-		]
+		"target": "ES2022"
 	}
 }

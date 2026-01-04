@@ -8,14 +8,12 @@
 		"./convex-effect-otel": "./src/convex-effect-otel.ts",
 		"./sentry": "./src/sentry.ts",
 		"./sentry-effect": "./src/sentry-effect.ts",
-		"./axiom": "./src/axiom.ts",
-		"./observability": "./src/observability.ts"
+		"./axiom": "./src/axiom.ts"
 	},
 	"scripts": {},
 	"dependencies": {
 		"@effect/opentelemetry": "^0.59.0",
 		"@effect/platform": "catalog:",
-		"@opentelemetry/auto-instrumentations-node": "^0.67.2",
 		"@opentelemetry/context-async-hooks": "^2.2.0",
 		"@opentelemetry/core": "^1.30.0",
 		"@opentelemetry/exporter-trace-otlp-http": "^0.208.0",

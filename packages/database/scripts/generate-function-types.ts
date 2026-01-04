@@ -109,7 +109,12 @@ async function scanDirectory(
 	namespaces: Set<string>,
 	namespaceToFunctions: Map<string, FunctionInfo[]>,
 ): Promise<void> {
-	const files = await readdir(dir);
+	let files: string[];
+	try {
+		files = await readdir(dir);
+	} catch {
+		return;
+	}
 
 	for (const file of files) {
 		if (file.endsWith(".test.ts") || !file.endsWith(".ts")) {

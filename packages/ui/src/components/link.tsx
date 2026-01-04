@@ -2,19 +2,9 @@
 import NextLink from "next/link";
 import type React from "react";
 import { cn } from "../lib/utils";
-import { isOnMainSite, normalizeSubpath } from "../utils/links";
-import { useTenant } from "./tenant-context";
 
 function isExternalUrl(href: string): boolean {
-	if (!href.startsWith("http://") && !href.startsWith("https://")) {
-		return false;
-	}
-	try {
-		const url = new URL(href);
-		return !isOnMainSite(url.host);
-	} catch {
-		return false;
-	}
+	return href.startsWith("http://") || href.startsWith("https://");
 }
 
 export function Link(
@@ -24,19 +14,7 @@ export function Link(
 	},
 ) {
 	const { icon, className, ...rest } = props;
-	const tenant = useTenant();
-	const tenantSubpath = normalizeSubpath(tenant?.subpath);
-	const isRelative = rest.href.startsWith("/");
-	const startsWithSubpath =
-		tenantSubpath &&
-		(rest.href === `/${tenantSubpath}` ||
-			rest.href.startsWith(`/${tenantSubpath}/`));
-	const finalHref =
-		tenantSubpath && isRelative && !startsWithSubpath
-			? `/${tenantSubpath}${rest.href}`
-			: rest.href;
-
-	const isExternal = isExternalUrl(finalHref);
+	const isExternal = isExternalUrl(rest.href);
 
 	if (isExternal) {
 		const { prefetch, replace, scroll, shallow, passHref, ...anchorProps } =
@@ -45,7 +23,7 @@ export function Link(
 			return (
 				<a
 					{...anchorProps}
-					href={finalHref}
+					href={rest.href}
 					target="_blank"
 					rel="noopener noreferrer"
 					className={cn("flex flex-row items-center gap-2", className)}
@@ -58,7 +36,7 @@ export function Link(
 		return (
 			<a
 				{...anchorProps}
-				href={finalHref}
+				href={rest.href}
 				target="_blank"
 				rel="noopener noreferrer"
 				className={className}
@@ -74,14 +52,11 @@ export function Link(
 				scroll={true}
 				prefetch={false}
 				{...rest}
-				href={finalHref}
 				className={cn("flex flex-row items-center gap-2", className)}
 			>
 				{props.icon}
 				{props.children}
 			</NextLink>
 		);
-	return (
-		<NextLink scroll={true} prefetch={false} {...props} href={finalHref} />
-	);
+	return <NextLink scroll={true} prefetch={false} {...props} />;
 }

@@ -1,27 +1,26 @@
 "use client";
 
-import type React from "react";
 import { createContext, useContext } from "react";
 
-export type Tenant = {
+type Tenant = {
+	serverId: string;
 	name: string;
-	icon: string | undefined;
-	description: string;
-	customDomain?: string | null;
-	subpath?: string | null;
-	discordId: bigint;
+	icon: string | null;
+	customDomain: string | null;
+	subpath?: string;
 };
 
 const TenantContext = createContext<Tenant | null>(null);
 
-export function TenantProvider(props: {
+export function TenantProvider({
+	tenant,
+	children,
+}: {
 	tenant: Tenant | null;
 	children: React.ReactNode;
 }) {
 	return (
-		<TenantContext.Provider value={props.tenant}>
-			{props.children}
-		</TenantContext.Provider>
+		<TenantContext.Provider value={tenant}>{children}</TenantContext.Provider>
 	);
 }
 

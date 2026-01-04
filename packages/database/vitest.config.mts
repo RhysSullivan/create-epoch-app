@@ -5,7 +5,7 @@ export default defineConfig({
 		environment: "edge-runtime",
 		server: {
 			deps: {
-				inline: ["@packages/convex-test", "@packages/test-utils"],
+				inline: ["@packages/convex-test", "@packages/utils"],
 			},
 		},
 		poolOptions: {

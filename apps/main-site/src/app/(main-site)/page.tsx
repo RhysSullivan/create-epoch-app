@@ -1,47 +1,10 @@
-import { Database } from "@packages/database/database";
-import { decodeCursor } from "@packages/ui/utils/cursor";
-import { Effect } from "effect";
-import { Suspense } from "react";
-import { runtime } from "../../lib/runtime";
-import { HomePageClient, HomePageSkeleton } from "./client";
-
-type Props = {
-	searchParams: Promise<{ cursor?: string }>;
-};
-
-export const dynamic = "force-dynamic";
-
-async function fetchRecentThreads(cursor: string | null) {
-	return Effect.gen(function* () {
-		const database = yield* Database;
-		return yield* database.public.search.getRecentThreads({
-			paginationOpts: {
-				numItems: 20,
-				cursor,
-			},
-		});
-	}).pipe(runtime.runPromise);
-}
-
-async function HomePageLoader({ cursor }: { cursor: string | null }) {
-	const initialData = await fetchRecentThreads(cursor);
-
+export default function HomePage() {
 	return (
-		<HomePageClient
-			initialData={initialData}
-			nextCursor={initialData.isDone ? null : initialData.continueCursor}
-			currentCursor={cursor}
-		/>
-	);
-}
-
-export default async function HomePage(props: Props) {
-	const searchParams = await props.searchParams;
-	const cursor = searchParams.cursor ? decodeCursor(searchParams.cursor) : null;
-
-	return (
-		<Suspense fallback={<HomePageSkeleton />}>
-			<HomePageLoader cursor={cursor} />
-		</Suspense>
+		<main className="flex min-h-screen flex-col items-center justify-center p-24">
+			<h1 className="text-4xl font-bold">Create Epoch App</h1>
+			<p className="mt-4 text-lg text-muted-foreground">
+				Effect + Convex + Next.js
+			</p>
+		</main>
 	);
 }

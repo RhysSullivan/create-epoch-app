@@ -1,8 +1,4 @@
-import { PostHogCaptureClientLayer } from "@packages/database/analytics/server";
-import { type Database, DatabaseHttpLayer } from "@packages/database/database";
-import type { Storage } from "@packages/database/storage";
 import { type Effect, Layer, ManagedRuntime } from "effect";
-import { BotLayers } from "../bot";
 import { PlatformLayer, sharedMemoMap } from "./atom-runtime";
 import { DiscordClientLayer } from "./discord-client-service";
 import { DiscordLayerInternal } from "./discord-service";
@@ -10,27 +6,14 @@ import { ReacordLayer } from "./reacord-layer";
 
 export { atomRuntime } from "./atom-runtime";
 
-export const createAppLayer = (
-	storageLayer: Layer.Layer<Storage, never, Database>,
-) => {
-	const StorageWithDatabase = storageLayer.pipe(
-		Layer.provide(DatabaseHttpLayer),
-	);
-
+export const createAppLayer = () => {
 	const DiscordLayers = Layer.mergeAll(
 		DiscordClientLayer,
 		DiscordLayerInternal,
 		ReacordLayer,
 	).pipe(Layer.provide(DiscordClientLayer));
 
-	const InfraLayer = Layer.mergeAll(
-		PlatformLayer,
-		DiscordLayers,
-		StorageWithDatabase,
-		PostHogCaptureClientLayer,
-	);
-
-	return BotLayers.pipe(Layer.provideMerge(InfraLayer));
+	return Layer.mergeAll(PlatformLayer, DiscordLayers);
 };
 
 export const runMain = <A, E, R, EL>(
