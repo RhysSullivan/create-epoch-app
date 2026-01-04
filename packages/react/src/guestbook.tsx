@@ -4,7 +4,7 @@ import {
 	convexSubscriptionAtom,
 	convexMutationAtom,
 } from "@packages/confect/client";
-import { api } from "../convex/_generated/api";
+import { api } from "@packages/database/convex/_generated/api";
 
 export const createGuestbookAtoms = (
 	runtime: Atom.AtomRuntime<ConvexClient>,

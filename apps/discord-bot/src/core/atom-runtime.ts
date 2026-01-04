@@ -1,4 +1,4 @@
-import { ConvexClientLayer } from "@packages/confect/client";
+import { type ConvexClient, ConvexClientLayer } from "@packages/confect/client";
 import { createAxiomLayer } from "@packages/observability/axiom";
 import { createOtelLayer } from "@packages/observability/effect-otel";
 import { createSentryEffectLayer } from "@packages/observability/sentry-effect";
@@ -50,11 +50,17 @@ const ObservabilityLayer = Layer.mergeAll(
 	LoggerLayer,
 );
 
-const ConvexLayer = process.env.CONVEX_URL
-	? ConvexClientLayer(process.env.CONVEX_URL)
-	: Layer.empty;
+const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
+if (!CONVEX_URL) {
+	throw new Error("CONVEX_URL environment variable is required");
+}
 
-export const PlatformLayer = Layer.mergeAll(ObservabilityLayer, ConvexLayer);
+const AppConvexClientLayer = ConvexClientLayer(CONVEX_URL);
+
+export const PlatformLayer: Layer.Layer<ConvexClient> = Layer.mergeAll(
+	ObservabilityLayer,
+	AppConvexClientLayer,
+);
 
 export const sharedMemoMap = Effect.runSync(Layer.makeMemoMap);
 

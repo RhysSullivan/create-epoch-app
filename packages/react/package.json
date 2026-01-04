@@ -1,0 +1,23 @@
+{
+	"name": "@packages/react",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"typecheck": "tsgo --noEmit"
+	},
+	"exports": {
+		"./guestbook": "./src/guestbook.tsx"
+	},
+	"dependencies": {
+		"@effect-atom/atom": "catalog:",
+		"@packages/confect": "workspace:*",
+		"@packages/database": "workspace:*",
+		"effect": "catalog:",
+		"react": "catalog:"
+	},
+	"devDependencies": {
+		"@packages/typescript-config": "workspace:*",
+		"@types/node": "catalog:",
+		"@types/react": "catalog:"
+	}
+}

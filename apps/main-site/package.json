@@ -19,6 +19,7 @@
 		"@effect-atom/atom-react": "catalog:",
 		"@packages/confect": "workspace:*",
 		"@packages/database": "workspace:*",
+		"@packages/react": "workspace:*",
 		"@packages/ui": "workspace:*",
 		"effect": "catalog:",
 		"@sentry/nextjs": "^9",

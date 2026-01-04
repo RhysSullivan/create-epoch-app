@@ -160,6 +160,7 @@ type RendererOptions =
 	| {
 			type: "interaction";
 			interaction: CommandInteraction;
+			ephemeral?: boolean;
 			runEffect?: RunEffect;
 	  }
 	| {
@@ -745,8 +746,15 @@ export class Renderer {
 				yield* Effect.annotateCurrentSpan({
 					"reacord.update_path": "initial_reply",
 				});
+				const ephemeral =
+					this.options.type === "interaction" && this.options.ephemeral;
 				this.message = yield* Effect.tryPromise({
-					try: () => interaction.reply({ ...discordOptions, fetchReply: true }),
+					try: () =>
+						interaction.reply({
+							...discordOptions,
+							fetchReply: true,
+							ephemeral,
+						}),
 					catch: (cause) => new DiscordApiError({ operation: "reply", cause }),
 				}).pipe(Effect.withSpan("reacord.discord_reply"));
 				return;
@@ -923,13 +931,19 @@ export class Renderer {
 	}
 }
 
+export interface InteractionReplyOptions {
+	ephemeral?: boolean;
+}
+
 export function createInteractionReplyRenderer(
 	interaction: CommandInteraction,
 	runEffect?: RunEffect,
+	options?: InteractionReplyOptions,
 ) {
 	return new Renderer({
 		type: "interaction",
 		interaction,
+		ephemeral: options?.ephemeral,
 		runEffect,
 	});
 }

@@ -15,6 +15,7 @@ import { InstanceProvider } from "./instance-context";
 import { reconciler } from "./internal/reconciler";
 import {
 	createInteractionReplyRenderer,
+	type InteractionReplyOptions,
 	type Renderer,
 } from "./internal/renderer";
 
@@ -30,12 +31,17 @@ export interface ReacordConfig {
 	maxInstances?: number;
 }
 
+export interface ReplyOptions {
+	ephemeral?: boolean;
+}
+
 export class Reacord extends Context.Tag("Reacord")<
 	Reacord,
 	{
 		reply: (
 			interaction: CommandInteraction,
 			content: ReactNode,
+			options?: ReplyOptions,
 		) => Effect.Effect<ReacordInstance>;
 		cleanup: () => void;
 	}
@@ -215,9 +221,17 @@ export function makeReacord(
 	}
 
 	return {
-		reply: (interaction: CommandInteraction, content: ReactNode) =>
+		reply: (
+			interaction: CommandInteraction,
+			content: ReactNode,
+			options?: ReplyOptions,
+		) =>
 			Effect.sync(() => {
-				const renderer = createInteractionReplyRenderer(interaction, runEffect);
+				const renderer = createInteractionReplyRenderer(
+					interaction,
+					runEffect,
+					options,
+				);
 				return createInstance(renderer, content);
 			}),
 		cleanup: () => {

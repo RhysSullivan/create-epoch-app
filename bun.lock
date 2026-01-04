@@ -17,8 +17,10 @@
       "name": "@packages/discord-bot",
       "dependencies": {
         "@packages/confect": "workspace:*",
+        "@packages/database": "workspace:*",
         "@packages/observability": "workspace:*",
         "@packages/reacord": "workspace:*",
+        "@packages/react": "workspace:*",
         "discord.js": "^14.25.1",
         "effect": "catalog:",
       },
@@ -36,6 +38,7 @@
         "@effect-atom/atom-react": "catalog:",
         "@packages/confect": "workspace:*",
         "@packages/database": "workspace:*",
+        "@packages/react": "workspace:*",
         "@packages/ui": "workspace:*",
         "@sentry/nextjs": "^9",
         "@vercel/speed-insights": "^1.3.1",
@@ -150,6 +153,22 @@
         "@effect/platform": "catalog:",
         "discord.js": "^14",
         "effect": "catalog:",
+      },
+    },
+    "packages/react": {
+      "name": "@packages/react",
+      "version": "1.0.0",
+      "dependencies": {
+        "@effect-atom/atom": "catalog:",
+        "@packages/confect": "workspace:*",
+        "@packages/database": "workspace:*",
+        "effect": "catalog:",
+        "react": "catalog:",
+      },
+      "devDependencies": {
+        "@packages/typescript-config": "workspace:*",
+        "@types/node": "catalog:",
+        "@types/react": "catalog:",
       },
     },
     "packages/typescript-config": {
@@ -696,6 +715,8 @@
     "@packages/observability": ["@packages/observability@workspace:packages/observability"],
 
     "@packages/reacord": ["@packages/reacord@workspace:packages/reacord"],
+
+    "@packages/react": ["@packages/react@workspace:packages/react"],
 
     "@packages/typescript-config": ["@packages/typescript-config@workspace:packages/typescript-config"],
 

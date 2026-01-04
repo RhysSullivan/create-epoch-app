@@ -14,7 +14,9 @@
 	},
 	"dependencies": {
 		"@packages/confect": "workspace:*",
+		"@packages/database": "workspace:*",
 		"@packages/observability": "workspace:*",
+		"@packages/react": "workspace:*",
 		"@packages/reacord": "workspace:*",
 		"discord.js": "^14.25.1",
 		"effect": "catalog:"

@@ -2,7 +2,7 @@
 
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react";
 import { atomRuntime } from "@packages/ui/components/convex-client-provider";
-import { createGuestbookAtoms, Result } from "@packages/database/guestbook";
+import { createGuestbookAtoms, Result } from "@packages/react/guestbook";
 import { Button } from "@packages/ui/components/button";
 import { Input } from "@packages/ui/components/input";
 import { Cause } from "effect";
