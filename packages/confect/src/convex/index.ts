@@ -1,2 +1,2 @@
 export { ConvexFunctionType, type FunctionType } from "./ConvexFunctionType";
-export { toModule, toInternalModule, toModuleQuery, toModuleMutation, toModuleAction } from "./RpcConvex";
+export { query, mutation, action, internalQuery, internalMutation, internalAction } from "./RpcConvex";

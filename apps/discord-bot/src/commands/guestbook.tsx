@@ -1,7 +1,6 @@
 import { Result } from "@effect-atom/atom";
 import { GuestbookRpcs } from "@packages/api/guestbook";
 import { RpcClient } from "@packages/confect/rpc";
-import { api } from "@packages/database/convex/_generated/api";
 import {
 	ActionRow,
 	Button,
@@ -13,16 +12,22 @@ import {
 import { Cause } from "effect";
 import { useState } from "react";
 
+const CONVEX_URL = process.env.CONVEX_URL ?? "";
+const PRIVATE_ACCESS_KEY = process.env.PRIVATE_ACCESS_KEY ?? "";
+
 const guestbookClient = RpcClient.makeWithShared(
 	GuestbookRpcs,
-	api.rpc.guestbook,
-	{ url: process.env.CONVEX_URL ?? "" },
-	() => ({ privateAccessKey: process.env.PRIVATE_ACCESS_KEY ?? "" }),
+	{
+		list: { _type: "query" } as never,
+		add: { _type: "mutation" } as never,
+	},
+	{ url: CONVEX_URL },
+	() => ({ privateAccessKey: PRIVATE_ACCESS_KEY }),
 );
 
 export function GuestbookCommand() {
-	const result = useAtomValue(guestbookClient.list({}));
-	const addEntry = useAtomSet(guestbookClient.add);
+	const result = useAtomValue(guestbookClient.query("list", {}));
+	const addEntry = useAtomSet(guestbookClient.mutation("add"));
 	const [isAdding, setIsAdding] = useState(false);
 
 	const handleAdd = async () => {

@@ -1,7 +1,7 @@
 import { Rpc, RpcGroup } from "@effect/rpc";
 import { Atom, Result } from "@effect-atom/atom";
 import type { FunctionReference } from "convex/server";
-import { Context, Effect, Exit, Option, Schema, Stream } from "effect";
+import { Context, Effect, Exit, Option, Schema } from "effect";
 import { ConvexClient, ConvexClientLayer } from "../client/convex-client";
 import { ConvexFunctionType, type FunctionType } from "../convex/ConvexFunctionType";
 
@@ -9,7 +9,49 @@ export interface RpcClientConfig {
 	readonly url: string;
 }
 
+type ConvexApiModule = Record<string, FunctionReference<"query" | "mutation" | "action">>;
+
 type AnyRpcWithProps = Rpc.AnyWithProps;
+
+type ExtractRpcByTag<Rpcs extends Rpc.Any, Tag extends string> = Extract<Rpcs, { readonly _tag: Tag }>;
+
+export interface RpcConvexClient<Rpcs extends Rpc.Any, Api extends ConvexApiModule> {
+	readonly runtime: Atom.AtomRuntime<ConvexClient>;
+	
+	readonly query: <Tag extends Rpcs["_tag"] & keyof Api>(
+		tag: Tag,
+		payload: Rpc.Payload<ExtractRpcByTag<Rpcs, Tag & string>>,
+	) => Atom.Atom<Result.Result<Rpc.Success<ExtractRpcByTag<Rpcs, Tag & string>>, Rpc.Error<ExtractRpcByTag<Rpcs, Tag & string>>>>;
+	
+	readonly mutation: <Tag extends Rpcs["_tag"] & keyof Api>(
+		tag: Tag,
+	) => Atom.AtomResultFn<
+		Rpc.Payload<ExtractRpcByTag<Rpcs, Tag & string>>,
+		Rpc.Success<ExtractRpcByTag<Rpcs, Tag & string>>,
+		Rpc.Error<ExtractRpcByTag<Rpcs, Tag & string>>
+	>;
+}
+
+export interface RpcConvexClientWithShared<
+	Rpcs extends Rpc.Any, 
+	Api extends ConvexApiModule,
+	Shared extends Record<string, unknown>,
+> {
+	readonly runtime: Atom.AtomRuntime<ConvexClient>;
+	
+	readonly query: <Tag extends Rpcs["_tag"] & keyof Api>(
+		tag: Tag,
+		payload: Omit<Rpc.Payload<ExtractRpcByTag<Rpcs, Tag & string>>, keyof Shared>,
+	) => Atom.Atom<Result.Result<Rpc.Success<ExtractRpcByTag<Rpcs, Tag & string>>, Rpc.Error<ExtractRpcByTag<Rpcs, Tag & string>>>>;
+	
+	readonly mutation: <Tag extends Rpcs["_tag"] & keyof Api>(
+		tag: Tag,
+	) => Atom.AtomResultFn<
+		Omit<Rpc.Payload<ExtractRpcByTag<Rpcs, Tag & string>>, keyof Shared>,
+		Rpc.Success<ExtractRpcByTag<Rpcs, Tag & string>>,
+		Rpc.Error<ExtractRpcByTag<Rpcs, Tag & string>>
+	>;
+}
 
 const getFunctionType = (rpc: AnyRpcWithProps): FunctionType =>
 	Option.getOrElse(
@@ -17,213 +59,98 @@ const getFunctionType = (rpc: AnyRpcWithProps): FunctionType =>
 		() => "query" as FunctionType,
 	);
 
-type QueryMethod<R extends Rpc.Any> = (
-	payload: Rpc.Payload<R>,
-) => Atom.Atom<Result.Result<Rpc.Success<R>, Rpc.Error<R>>>;
+const createQueryAtom = (
+	runtime: Atom.AtomRuntime<ConvexClient>,
+	rpc: AnyRpcWithProps,
+	convexFn: FunctionReference<"query">,
+	payload: unknown,
+): Atom.Atom<Result.Result<unknown, unknown>> => {
+	const exitSchema = Schema.Exit({
+		success: rpc.successSchema,
+		failure: rpc.errorSchema,
+		defect: Schema.Defect,
+	});
 
-type MutationMethod<R extends Rpc.Any> = Atom.AtomResultFn<
-	Rpc.Payload<R>,
-	Rpc.Success<R>,
-	Rpc.Error<R>
->;
-
-type ActionMethod<R extends Rpc.Any> = Atom.AtomResultFn<
-	Rpc.Payload<R>,
-	Rpc.Success<R>,
-	Rpc.Error<R>
->;
-
-type QueryMethodWithShared<R extends Rpc.Any, Shared extends Record<string, unknown>> = (
-	payload: Omit<Rpc.Payload<R>, keyof Shared>,
-) => Atom.Atom<Result.Result<Rpc.Success<R>, Rpc.Error<R>>>;
-
-type MutationMethodWithShared<R extends Rpc.Any, Shared extends Record<string, unknown>> = Atom.AtomResultFn<
-	Omit<Rpc.Payload<R>, keyof Shared>,
-	Rpc.Success<R>,
-	Rpc.Error<R>
->;
-
-type ActionMethodWithShared<R extends Rpc.Any, Shared extends Record<string, unknown>> = Atom.AtomResultFn<
-	Omit<Rpc.Payload<R>, keyof Shared>,
-	Rpc.Success<R>,
-	Rpc.Error<R>
->;
-
-type ConvexApiModule = Record<
-	string,
-	FunctionReference<"query"> | FunctionReference<"mutation"> | FunctionReference<"action">
->;
-
-type ExtractFunctionType<F> = F extends { _type: infer T } ? T : never;
-
-type RpcMethodForFunctionType<R extends Rpc.Any, FnType extends "query" | "mutation" | "action"> =
-	FnType extends "query" ? QueryMethod<R> :
-	FnType extends "mutation" ? MutationMethod<R> :
-	FnType extends "action" ? ActionMethod<R> :
-	never;
-
-type RpcMethodWithSharedForFunctionType<
-	R extends Rpc.Any,
-	Shared extends Record<string, unknown>,
-	FnType extends "query" | "mutation" | "action"
-> =
-	FnType extends "query" ? QueryMethodWithShared<R, Shared> :
-	FnType extends "mutation" ? MutationMethodWithShared<R, Shared> :
-	FnType extends "action" ? ActionMethodWithShared<R, Shared> :
-	never;
-
-export type RpcClient<
-	Rpcs extends Rpc.Any,
-	Api extends ConvexApiModule = ConvexApiModule,
-> = {
-	readonly runtime: Atom.AtomRuntime<ConvexClient>;
-} & {
-	readonly [K in keyof Api & Rpcs["_tag"]]: RpcMethodForFunctionType<
-		Extract<Rpcs, { _tag: K }>,
-		ExtractFunctionType<Api[K]>
-	>;
+	return runtime.atom(
+		Effect.gen(function* () {
+			const client = yield* ConvexClient;
+			const encoded = yield* Schema.encode(rpc.payloadSchema)(payload);
+			const result = yield* client.query(convexFn, encoded as Record<string, unknown>);
+			const exit = yield* Schema.decode(exitSchema)(result as Schema.Schema.Encoded<typeof exitSchema>);
+			if (Exit.isFailure(exit)) {
+				return yield* exit;
+			}
+			return exit.value;
+		}),
+	);
 };
 
-export type RpcClientFromGroup<
-	Group extends RpcGroup.Any,
-	Api extends ConvexApiModule = ConvexApiModule,
-> = RpcClient<RpcGroup.Rpcs<Group>, Api>;
+const createMutationFn = (
+	runtime: Atom.AtomRuntime<ConvexClient>,
+	rpc: AnyRpcWithProps,
+	convexFn: FunctionReference<"mutation">,
+	getFullPayload: (payload: unknown) => unknown,
+): Atom.AtomResultFn<unknown, unknown, unknown> => {
+	const exitSchema = Schema.Exit({
+		success: rpc.successSchema,
+		failure: rpc.errorSchema,
+		defect: Schema.Defect,
+	});
 
-export type RpcClientWithShared<
-	Rpcs extends Rpc.Any,
-	Api extends ConvexApiModule,
-	Shared extends Record<string, unknown>,
-> = {
-	readonly runtime: Atom.AtomRuntime<ConvexClient>;
-} & {
-	readonly [K in keyof Api as K extends Rpcs["_tag"] ? K : never]: RpcMethodWithSharedForFunctionType<
-		Extract<Rpcs, { _tag: K }>,
-		Shared,
-		ExtractFunctionType<Api[K]>
-	>;
+	return runtime.fn<unknown>()(
+		Effect.fnUntraced(function* (payload) {
+			const client = yield* ConvexClient;
+			const fullPayload = getFullPayload(payload);
+			const encoded = yield* Schema.encode(rpc.payloadSchema)(fullPayload);
+			const result = yield* client.mutation(convexFn, encoded as Record<string, unknown>);
+			const exit = yield* Schema.decode(exitSchema)(result as Schema.Schema.Encoded<typeof exitSchema>);
+			if (Exit.isFailure(exit)) {
+				return yield* exit;
+			}
+			return exit.value;
+		}),
+	);
 };
-
-export type RpcClientWithSharedFromGroup<
-	Group extends RpcGroup.Any,
-	Api extends ConvexApiModule,
-	Shared extends Record<string, unknown>,
-> = RpcClientWithShared<RpcGroup.Rpcs<Group>, Api, Shared>;
 
 export const make = <Rpcs extends Rpc.Any, Api extends ConvexApiModule>(
 	group: RpcGroup.RpcGroup<Rpcs>,
 	convexApi: Api,
 	config: RpcClientConfig,
-): RpcClient<Rpcs, Api> => {
+): RpcConvexClient<Rpcs, Api> => {
 	const runtime = Atom.runtime(ConvexClientLayer(config.url));
 
-	const cache = new Map<string, unknown>();
+	const queryFamilies = new Map<string, (payload: unknown) => Atom.Atom<Result.Result<unknown, unknown>>>();
+	const mutationFns = new Map<string, Atom.AtomResultFn<unknown, unknown, unknown>>();
 
-	const decodeExit = (
-		rpc: AnyRpcWithProps,
-		encodedExit: Schema.ExitEncoded<unknown, unknown, unknown>,
-	): Effect.Effect<unknown, unknown, never> => {
-		const exitSchema = Schema.Exit({
-			success: rpc.successSchema as Schema.Schema<unknown, unknown>,
-			failure: rpc.errorSchema as Schema.Schema<unknown, unknown>,
-			defect: Schema.Defect,
-		});
-
-		return Effect.gen(function* () {
-			const exit = yield* Schema.decode(exitSchema)(encodedExit).pipe(Effect.orDie);
-			if (Exit.isSuccess(exit)) {
-				return exit.value;
+	return {
+		runtime,
+		query: (tag, payload) => {
+			const tagStr = tag as string;
+			let family = queryFamilies.get(tagStr);
+			if (!family) {
+				const rpc = group.requests.get(tagStr) as unknown as AnyRpcWithProps;
+				const convexFn = convexApi[tagStr] as FunctionReference<"query">;
+				family = Atom.family((p: unknown) => createQueryAtom(runtime, rpc, convexFn, p));
+				queryFamilies.set(tagStr, family);
 			}
-			return yield* exit;
-		});
-	};
-
-	const createQueryMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"query">) => {
-		const subscriptionCache = new Map<string, Atom.Atom<Result.Result<unknown, unknown>>>();
-
-		return (payload: unknown) => {
-			const key = JSON.stringify(payload);
-			if (!subscriptionCache.has(key)) {
-				const stream = Stream.unwrap(
-					Effect.gen(function* () {
-						const client = yield* ConvexClient;
-						const encodedPayload = yield* Schema.encode(
-							rpc.payloadSchema as Schema.Schema<unknown, unknown>,
-						)(payload).pipe(Effect.orDie);
-						return Stream.mapEffect(
-							client.subscribe(apiRef, encodedPayload) as Stream.Stream<
-								Schema.ExitEncoded<unknown, unknown, unknown>,
-								never,
-								never
-							>,
-							(result) => decodeExit(rpc, result),
-						);
-					}),
-				);
-				subscriptionCache.set(
-					key,
-					runtime.atom(stream as Stream.Stream<unknown, unknown, ConvexClient>),
-				);
+			return family(payload) as Atom.Atom<Result.Result<Rpc.Success<ExtractRpcByTag<Rpcs, typeof tag & string>>, Rpc.Error<ExtractRpcByTag<Rpcs, typeof tag & string>>>>;
+		},
+		mutation: (tag) => {
+			const tagStr = tag as string;
+			let fn = mutationFns.get(tagStr);
+			if (!fn) {
+				const rpc = group.requests.get(tagStr) as unknown as AnyRpcWithProps;
+				const convexFn = convexApi[tagStr] as FunctionReference<"mutation">;
+				fn = createMutationFn(runtime, rpc, convexFn, (p) => p);
+				mutationFns.set(tagStr, fn);
 			}
-			return subscriptionCache.get(key)!;
-		};
+			return fn as Atom.AtomResultFn<
+				Rpc.Payload<ExtractRpcByTag<Rpcs, typeof tag & string>>,
+				Rpc.Success<ExtractRpcByTag<Rpcs, typeof tag & string>>,
+				Rpc.Error<ExtractRpcByTag<Rpcs, typeof tag & string>>
+			>;
+		},
 	};
-
-	const createMutationMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"mutation">) => {
-		return runtime.fn(
-			Effect.fnUntraced(function* (payload: unknown) {
-				const client = yield* ConvexClient;
-				const encodedPayload = yield* Schema.encode(
-					rpc.payloadSchema as Schema.Schema<unknown, unknown>,
-				)(payload).pipe(Effect.orDie);
-				const result: Schema.ExitEncoded<unknown, unknown, unknown> = yield* client.mutation(
-					apiRef,
-					encodedPayload,
-				);
-				return yield* decodeExit(rpc, result);
-			}),
-		);
-	};
-
-	const createActionMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"action">) => {
-		return runtime.fn(
-			Effect.fnUntraced(function* (payload: unknown) {
-				const client = yield* ConvexClient;
-				const encodedPayload = yield* Schema.encode(
-					rpc.payloadSchema as Schema.Schema<unknown, unknown>,
-				)(payload).pipe(Effect.orDie);
-				const result: Schema.ExitEncoded<unknown, unknown, unknown> = yield* client.action(
-					apiRef,
-					encodedPayload,
-				);
-				return yield* decodeExit(rpc, result);
-			}),
-		);
-	};
-
-	const client: Record<string, unknown> = { runtime };
-
-	for (const [tag, rpc] of group.requests) {
-		const rpcWithProps = rpc as never as AnyRpcWithProps;
-		const apiRef = convexApi[tag];
-		if (!apiRef) {
-			throw new Error(`Missing API reference for RPC: ${tag}`);
-		}
-
-		if (!cache.has(tag)) {
-			const functionType = getFunctionType(rpcWithProps);
-			if (functionType === "query") {
-				cache.set(tag, createQueryMethod(rpcWithProps, apiRef as FunctionReference<"query">));
-			} else if (functionType === "mutation") {
-				cache.set(tag, createMutationMethod(rpcWithProps, apiRef as FunctionReference<"mutation">));
-			} else {
-				cache.set(tag, createActionMethod(rpcWithProps, apiRef as FunctionReference<"action">));
-			}
-		}
-
-		client[tag] = cache.get(tag);
-	}
-
-	return client as RpcClient<Rpcs, Api>;
 };
 
 export const makeWithShared = <
@@ -235,112 +162,45 @@ export const makeWithShared = <
 	convexApi: Api,
 	config: RpcClientConfig,
 	getShared: () => Shared,
-): RpcClientWithShared<Rpcs, Api, Shared> => {
+): RpcConvexClientWithShared<Rpcs, Api, Shared> => {
 	const runtime = Atom.runtime(ConvexClientLayer(config.url));
 
-	const decodeExit = (
-		rpc: AnyRpcWithProps,
-		encodedExit: Schema.ExitEncoded<unknown, unknown, unknown>,
-	): Effect.Effect<unknown, unknown, never> => {
-		const exitSchema = Schema.Exit({
-			success: rpc.successSchema as Schema.Schema<unknown, unknown>,
-			failure: rpc.errorSchema as Schema.Schema<unknown, unknown>,
-			defect: Schema.Defect,
-		});
+	const queryFamilies = new Map<string, (payload: unknown) => Atom.Atom<Result.Result<unknown, unknown>>>();
+	const mutationFns = new Map<string, Atom.AtomResultFn<unknown, unknown, unknown>>();
 
-		return Effect.gen(function* () {
-			const exit = yield* Schema.decode(exitSchema)(encodedExit).pipe(Effect.orDie);
-			if (Exit.isSuccess(exit)) {
-				return exit.value;
+	return {
+		runtime,
+		query: (tag, payload) => {
+			const tagStr = tag as string;
+			let family = queryFamilies.get(tagStr);
+			if (!family) {
+				const rpc = group.requests.get(tagStr) as unknown as AnyRpcWithProps;
+				const convexFn = convexApi[tagStr] as FunctionReference<"query">;
+				family = Atom.family((p: unknown) => {
+					const fullPayload = { ...getShared(), ...(p as object) };
+					return createQueryAtom(runtime, rpc, convexFn, fullPayload);
+				});
+				queryFamilies.set(tagStr, family);
 			}
-			return yield* exit;
-		});
-	};
-
-	const createQueryMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"query">) => {
-		const subscriptionCache = new Map<string, Atom.Atom<Result.Result<unknown, unknown>>>();
-
-		return (partialPayload: unknown) => {
-			const payload = { ...getShared(), ...(partialPayload as Record<string, unknown>) };
-			const key = JSON.stringify(payload);
-			if (!subscriptionCache.has(key)) {
-				const stream = Stream.unwrap(
-					Effect.gen(function* () {
-						const client = yield* ConvexClient;
-						const encodedPayload = yield* Schema.encode(
-							rpc.payloadSchema as Schema.Schema<unknown, unknown>,
-						)(payload).pipe(Effect.orDie);
-						return Stream.mapEffect(
-							client.subscribe(apiRef, encodedPayload) as Stream.Stream<
-								Schema.ExitEncoded<unknown, unknown, unknown>,
-								never,
-								never
-							>,
-							(result) => decodeExit(rpc, result),
-						);
-					}),
-				);
-				subscriptionCache.set(
-					key,
-					runtime.atom(stream as Stream.Stream<unknown, unknown, ConvexClient>),
-				);
+			return family(payload) as Atom.Atom<Result.Result<Rpc.Success<ExtractRpcByTag<Rpcs, typeof tag & string>>, Rpc.Error<ExtractRpcByTag<Rpcs, typeof tag & string>>>>;
+		},
+		mutation: (tag) => {
+			const tagStr = tag as string;
+			let fn = mutationFns.get(tagStr);
+			if (!fn) {
+				const rpc = group.requests.get(tagStr) as unknown as AnyRpcWithProps;
+				const convexFn = convexApi[tagStr] as FunctionReference<"mutation">;
+				fn = createMutationFn(runtime, rpc, convexFn, (p) => ({
+					...getShared(),
+					...(p as object),
+				}));
+				mutationFns.set(tagStr, fn);
 			}
-			return subscriptionCache.get(key)!;
-		};
+			return fn as Atom.AtomResultFn<
+				Omit<Rpc.Payload<ExtractRpcByTag<Rpcs, typeof tag & string>>, keyof Shared>,
+				Rpc.Success<ExtractRpcByTag<Rpcs, typeof tag & string>>,
+				Rpc.Error<ExtractRpcByTag<Rpcs, typeof tag & string>>
+			>;
+		},
 	};
-
-	const createMutationMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"mutation">) => {
-		return runtime.fn(
-			Effect.fnUntraced(function* (partialPayload: unknown) {
-				const payload = { ...getShared(), ...(partialPayload as Record<string, unknown>) };
-				const client = yield* ConvexClient;
-				const encodedPayload = yield* Schema.encode(
-					rpc.payloadSchema as Schema.Schema<unknown, unknown>,
-				)(payload).pipe(Effect.orDie);
-				const result: Schema.ExitEncoded<unknown, unknown, unknown> = yield* client.mutation(
-					apiRef,
-					encodedPayload,
-				);
-				return yield* decodeExit(rpc, result);
-			}),
-		);
-	};
-
-	const createActionMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"action">) => {
-		return runtime.fn(
-			Effect.fnUntraced(function* (partialPayload: unknown) {
-				const payload = { ...getShared(), ...(partialPayload as Record<string, unknown>) };
-				const client = yield* ConvexClient;
-				const encodedPayload = yield* Schema.encode(
-					rpc.payloadSchema as Schema.Schema<unknown, unknown>,
-				)(payload).pipe(Effect.orDie);
-				const result: Schema.ExitEncoded<unknown, unknown, unknown> = yield* client.action(
-					apiRef,
-					encodedPayload,
-				);
-				return yield* decodeExit(rpc, result);
-			}),
-		);
-	};
-
-	const client: Record<string, unknown> = { runtime };
-
-	for (const [tag, rpc] of group.requests) {
-		const rpcWithProps = rpc as never as AnyRpcWithProps;
-		const apiRef = convexApi[tag];
-		if (!apiRef) {
-			throw new Error(`Missing API reference for RPC: ${tag}`);
-		}
-
-		const functionType = getFunctionType(rpcWithProps);
-		if (functionType === "query") {
-			client[tag] = createQueryMethod(rpcWithProps, apiRef as FunctionReference<"query">);
-		} else if (functionType === "mutation") {
-			client[tag] = createMutationMethod(rpcWithProps, apiRef as FunctionReference<"mutation">);
-		} else {
-			client[tag] = createActionMethod(rpcWithProps, apiRef as FunctionReference<"action">);
-		}
-	}
-
-	return client as RpcClientWithShared<Rpcs, Api, Shared>;
 };

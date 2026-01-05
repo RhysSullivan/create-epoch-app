@@ -1,6 +1,6 @@
-import * as AdminApi from "@packages/api/admin";
+import * as Admin from "@packages/api/admin";
 import { UnauthorizedError } from "@packages/api/admin";
-import { toModuleQuery, toModuleMutation } from "@packages/confect/convex";
+import { query, mutation } from "@packages/confect/convex";
 import { Effect } from "effect";
 import { confectSchema, ConfectMutationCtx, ConfectQueryCtx } from "../confect";
 import type { Id } from "../_generated/dataModel";
@@ -12,48 +12,42 @@ const validateAdminKey = (adminKey: string) =>
 		? Effect.void
 		: Effect.fail(new UnauthorizedError({ message: "Invalid admin key" }));
 
-export const getStats = toModuleQuery(
-	confectSchema,
-	AdminApi.getStats,
-	(args) =>
-		Effect.gen(function* () {
-			yield* validateAdminKey(args.adminKey);
-			const ctx = yield* ConfectQueryCtx;
+export const getStats = query(confectSchema, Admin.getStats, (args) =>
+	Effect.gen(function* () {
+		yield* validateAdminKey(args.adminKey);
+		const ctx = yield* ConfectQueryCtx;
 
-			const users = yield* ctx.db.query("users").collect();
-			const guestbook = yield* ctx.db.query("guestbook").collect();
-			const posts = yield* ctx.db.query("posts").collect();
+		const users = yield* ctx.db.query("users").collect();
+		const guestbook = yield* ctx.db.query("guestbook").collect();
+		const posts = yield* ctx.db.query("posts").collect();
 
-			return {
-				totalUsers: users.length,
-				totalGuestbookEntries: guestbook.length,
-				totalPosts: posts.length,
-			};
-		}),
+		return {
+			totalUsers: users.length,
+			totalGuestbookEntries: guestbook.length,
+			totalPosts: posts.length,
+		};
+	}),
 );
 
-export const listUsers = toModuleQuery(
-	confectSchema,
-	AdminApi.listUsers,
-	(args) =>
-		Effect.gen(function* () {
-			yield* validateAdminKey(args.adminKey);
-			const ctx = yield* ConfectQueryCtx;
+export const listUsers = query(confectSchema, Admin.listUsers, (args) =>
+	Effect.gen(function* () {
+		yield* validateAdminKey(args.adminKey);
+		const ctx = yield* ConfectQueryCtx;
 
-			const users = yield* ctx.db.query("users").take(args.limit ?? 50);
+		const users = yield* ctx.db.query("users").take(args.limit ?? 50);
 
-			return users.map((u) => ({
-				_id: u._id,
-				email: u.email,
-				name: u.name,
-				createdAt: u._creationTime,
-			}));
-		}),
+		return users.map((u) => ({
+			_id: u._id,
+			email: u.email,
+			name: u.name,
+			createdAt: u._creationTime,
+		}));
+	}),
 );
 
-export const deleteGuestbookEntry = toModuleMutation(
+export const deleteGuestbookEntry = mutation(
 	confectSchema,
-	AdminApi.deleteGuestbookEntry,
+	Admin.deleteGuestbookEntry,
 	(args) =>
 		Effect.gen(function* () {
 			yield* validateAdminKey(args.adminKey);

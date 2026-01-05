@@ -1,10 +1,10 @@
-import { GuestbookRpcs, ValidationError } from "@packages/api/guestbook";
-import { toModuleQuery, toModuleMutation } from "@packages/confect/convex";
+import * as Guestbook from "@packages/api/guestbook";
+import { ValidationError } from "@packages/api/guestbook";
+import { query, mutation } from "@packages/confect/convex";
 import { Effect } from "effect";
 import { ConfectMutationCtx, ConfectQueryCtx, confectSchema } from "../confect";
-import * as GuestbookApi from "@packages/api/guestbook";
 
-export const list = toModuleQuery(confectSchema, GuestbookApi.list, () =>
+export const list = query(confectSchema, Guestbook.list, () =>
 	Effect.gen(function* () {
 		const ctx = yield* ConfectQueryCtx;
 		const entries = yield* ctx.db.query("guestbook").order("desc").take(50);
@@ -17,7 +17,7 @@ export const list = toModuleQuery(confectSchema, GuestbookApi.list, () =>
 	}),
 );
 
-export const add = toModuleMutation(confectSchema, GuestbookApi.add, (args) =>
+export const add = mutation(confectSchema, Guestbook.add, (args) =>
 	Effect.gen(function* () {
 		const ctx = yield* ConfectMutationCtx;
 		const name = args.name.trim().slice(0, 50);
