@@ -1,4 +1,4 @@
-import type { Rpc, RpcGroup } from "@effect/rpc";
+import type { Rpc } from "@effect/rpc";
 import type { RpcMiddleware } from "@effect/rpc";
 import type { DefaultFunctionArgs, GenericActionCtx, GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import {
@@ -50,15 +50,22 @@ type ConfectMutationCtxFor<ConfectSchema extends GenericConfectSchema> =
 type ConfectActionCtxFor<ConfectSchema extends GenericConfectSchema> = 
 	ConfectActionCtx<ConfectDataModelFromConfectSchema<ConfectSchema>>;
 
+type RpcMiddlewareProvides<R extends Rpc.Any> = R extends Rpc.Rpc<
+	infer _Tag,
+	infer _Payload,
+	infer _Success,
+	infer _Error,
+	infer Middleware
+> ? Middleware extends RpcMiddleware.TagClassAny 
+	? Middleware["provides"] extends Context.Tag<infer Id, infer _Service> 
+		? Id 
+		: never
+	: never
+: never;
+
 type HandlerFn<R extends Rpc.Any, Ctx> = (
 	payload: Rpc.Payload<R>
-) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, Ctx>;
-
-const getFunctionType = (rpc: AnyRpcWithProps): FunctionType =>
-	Option.getOrElse(
-		Context.getOption(rpc.annotations, ConvexFunctionType),
-		() => "query" as FunctionType,
-	);
+) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, Ctx | RpcMiddlewareProvides<R>>;
 
 type MiddlewareOptions = {
 	readonly rpc: AnyRpcWithProps;
@@ -87,7 +94,17 @@ const applyMiddleware = <A, E, R>(
 	let result: Effect.Effect<A, E | unknown, R | unknown> = handler;
 
 	for (const tag of middlewares) {
-		const middleware = Context.unsafeGet(middlewareContext, tag) as RpcMiddleware.RpcMiddleware<unknown, unknown>;
+		const maybeMiddleware = Context.getOption(middlewareContext, tag);
+		if (Option.isNone(maybeMiddleware)) {
+			if (!tag.optional) {
+				result = Effect.flatMap(result, () => 
+					Effect.fail(new Error(`Missing required middleware: ${tag.key}`))
+				);
+			}
+			continue;
+		}
+		
+		const middleware = maybeMiddleware.value as RpcMiddleware.RpcMiddleware<unknown, unknown>;
 		
 		if (tag.wrap) {
 			const wrapMiddleware = middleware as unknown as RpcMiddleware.RpcMiddlewareWrap<unknown, unknown>;
@@ -117,23 +134,33 @@ const applyMiddleware = <A, E, R>(
 	return result;
 };
 
-type QueryResult<Visibility extends "public" | "internal"> = 
-	RegisteredQuery<Visibility, DefaultFunctionArgs, Promise<unknown>>;
+type RpcPayloadEncoded<R extends Rpc.Any> = R extends Rpc.Rpc<
+	infer _Tag,
+	infer Payload,
+	infer _Success,
+	infer _Error,
+	infer _Middleware
+> ? Payload extends Schema.Schema<infer _A, infer E, infer _R> ? E : never
+: never;
 
-type MutationResult<Visibility extends "public" | "internal"> = 
-	RegisteredMutation<Visibility, DefaultFunctionArgs, Promise<unknown>>;
+type RpcExitEncoded<R extends Rpc.Any> = Rpc.ExitEncoded<R>;
 
-type ActionResult<Visibility extends "public" | "internal"> = 
-	RegisteredAction<Visibility, DefaultFunctionArgs, Promise<unknown>>;
-
-const buildHandler = <ConfectDataModel extends GenericConfectDataModel>(
+const buildHandler = <
+	ConfectDataModel extends GenericConfectDataModel,
+	R extends Rpc.Any,
+	ConvexArgs extends DefaultFunctionArgs,
+	ConvexReturns,
+>(
 	rpc: AnyRpcWithProps,
-	handler: (payload: unknown) => Effect.Effect<unknown, unknown, unknown>,
+	handler: (payload: Rpc.Payload<R>) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, unknown>,
 	databaseSchemas: DatabaseSchemasFromConfectDataModel<ConfectDataModel>,
 	middlewareContext: Context.Context<never>,
 	functionType: FunctionType,
-	visibility: "public" | "internal",
-) => {
+): {
+	args: ReturnType<typeof compileArgsSchema>;
+	returns: ReturnType<typeof compileReturnsSchema>;
+	handler: (ctx: GenericQueryCtx<DataModelFromConfectDataModel<ConfectDataModel>> | GenericMutationCtx<DataModelFromConfectDataModel<ConfectDataModel>> | GenericActionCtx<DataModelFromConfectDataModel<ConfectDataModel>>, args: ConvexArgs) => Promise<ConvexReturns>;
+} => {
 	const exitSchema = Schema.Exit({
 		success: rpc.successSchema as Schema.Schema<unknown, unknown>,
 		failure: rpc.errorSchema as Schema.Schema<unknown, unknown>,
@@ -147,10 +174,10 @@ const buildHandler = <ConfectDataModel extends GenericConfectDataModel>(
 	type RawMutationCtx = GenericMutationCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
 	type RawActionCtx = GenericActionCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
 
-	const makeHandler = (ctx: RawQueryCtx | RawMutationCtx | RawActionCtx, args: DefaultFunctionArgs): Promise<unknown> =>
+	const makeHandler = (ctx: RawQueryCtx | RawMutationCtx | RawActionCtx, args: ConvexArgs): Promise<ConvexReturns> =>
 		pipe(
 			args,
-			Schema.decode(rpc.payloadSchema as Schema.Schema<unknown, DefaultFunctionArgs>),
+			Schema.decode(rpc.payloadSchema as Schema.Schema<Rpc.Payload<R>, ConvexArgs>),
 			Effect.orDie,
 			Effect.flatMap((decodedArgs) => {
 				const effect = handler(decodedArgs);
@@ -179,164 +206,199 @@ const buildHandler = <ConfectDataModel extends GenericConfectDataModel>(
 			Effect.exit,
 			Effect.flatMap((exit) => Schema.encode(exitSchema)(exit)),
 			Effect.runPromise,
-		);
+		) as Promise<ConvexReturns>;
 
-	const config = {
+	return {
 		args: argsValidator,
 		returns: returnsValidator,
 		handler: makeHandler,
 	};
+};
 
-	if (visibility === "public") {
-		if (functionType === "query") return queryGeneric(config);
-		if (functionType === "mutation") return mutationGeneric(config);
-		return actionGeneric(config);
+export interface RpcHandlerOptions {
+	readonly middleware?: Context.Context<never>;
+}
+
+export function query<
+	ConfectSchema extends GenericConfectSchema,
+	R extends Rpc.Any,
+	ConvexArgs extends DefaultFunctionArgs = RpcPayloadEncoded<R> & DefaultFunctionArgs,
+	ConvexReturns = RpcExitEncoded<R>,
+>(
+	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
+	rpc: R,
+	handler: HandlerFn<R, ConfectQueryCtxFor<ConfectSchema>>,
+	options?: RpcHandlerOptions,
+): RegisteredQuery<"public", ConvexArgs, Promise<ConvexReturns>> {
+	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
+	const databaseSchemas = databaseSchemasFromConfectSchema(
+		confectSchemaDefinition.confectSchema,
+	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
+
+	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
+	const config = buildHandler<ConfectDataModel, R, ConvexArgs, ConvexReturns>(
+		rpcWithProps,
+		handler as (payload: Rpc.Payload<R>) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, unknown>,
+		databaseSchemas,
+		options?.middleware ?? Context.empty(),
+		"query",
+	);
+	return queryGeneric(config) as RegisteredQuery<"public", ConvexArgs, Promise<ConvexReturns>>;
+}
+
+export function mutation<
+	ConfectSchema extends GenericConfectSchema,
+	R extends Rpc.Any,
+	ConvexArgs extends DefaultFunctionArgs = RpcPayloadEncoded<R> & DefaultFunctionArgs,
+	ConvexReturns = RpcExitEncoded<R>,
+>(
+	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
+	rpc: R,
+	handler: HandlerFn<R, ConfectMutationCtxFor<ConfectSchema>>,
+	options?: RpcHandlerOptions,
+): RegisteredMutation<"public", ConvexArgs, Promise<ConvexReturns>> {
+	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
+	const databaseSchemas = databaseSchemasFromConfectSchema(
+		confectSchemaDefinition.confectSchema,
+	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
+
+	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
+	const config = buildHandler<ConfectDataModel, R, ConvexArgs, ConvexReturns>(
+		rpcWithProps,
+		handler as (payload: Rpc.Payload<R>) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, unknown>,
+		databaseSchemas,
+		options?.middleware ?? Context.empty(),
+		"mutation",
+	);
+	return mutationGeneric(config) as RegisteredMutation<"public", ConvexArgs, Promise<ConvexReturns>>;
+}
+
+export function action<
+	ConfectSchema extends GenericConfectSchema,
+	R extends Rpc.Any,
+	ConvexArgs extends DefaultFunctionArgs = RpcPayloadEncoded<R> & DefaultFunctionArgs,
+	ConvexReturns = RpcExitEncoded<R>,
+>(
+	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
+	rpc: R,
+	handler: HandlerFn<R, ConfectActionCtxFor<ConfectSchema>>,
+	options?: RpcHandlerOptions,
+): RegisteredAction<"public", ConvexArgs, Promise<ConvexReturns>> {
+	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
+	const databaseSchemas = databaseSchemasFromConfectSchema(
+		confectSchemaDefinition.confectSchema,
+	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
+
+	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
+	const config = buildHandler<ConfectDataModel, R, ConvexArgs, ConvexReturns>(
+		rpcWithProps,
+		handler as (payload: Rpc.Payload<R>) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, unknown>,
+		databaseSchemas,
+		options?.middleware ?? Context.empty(),
+		"action",
+	);
+	return actionGeneric(config) as RegisteredAction<"public", ConvexArgs, Promise<ConvexReturns>>;
+}
+
+export function internalQuery<
+	ConfectSchema extends GenericConfectSchema,
+	R extends Rpc.Any,
+	ConvexArgs extends DefaultFunctionArgs = RpcPayloadEncoded<R> & DefaultFunctionArgs,
+	ConvexReturns = RpcExitEncoded<R>,
+>(
+	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
+	rpc: R,
+	handler: HandlerFn<R, ConfectQueryCtxFor<ConfectSchema>>,
+	options?: RpcHandlerOptions,
+): RegisteredQuery<"internal", ConvexArgs, Promise<ConvexReturns>> {
+	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
+	const databaseSchemas = databaseSchemasFromConfectSchema(
+		confectSchemaDefinition.confectSchema,
+	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
+
+	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
+	const config = buildHandler<ConfectDataModel, R, ConvexArgs, ConvexReturns>(
+		rpcWithProps,
+		handler as (payload: Rpc.Payload<R>) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, unknown>,
+		databaseSchemas,
+		options?.middleware ?? Context.empty(),
+		"query",
+	);
+	return internalQueryGeneric(config) as RegisteredQuery<"internal", ConvexArgs, Promise<ConvexReturns>>;
+}
+
+export function internalMutation<
+	ConfectSchema extends GenericConfectSchema,
+	R extends Rpc.Any,
+	ConvexArgs extends DefaultFunctionArgs = RpcPayloadEncoded<R> & DefaultFunctionArgs,
+	ConvexReturns = RpcExitEncoded<R>,
+>(
+	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
+	rpc: R,
+	handler: HandlerFn<R, ConfectMutationCtxFor<ConfectSchema>>,
+	options?: RpcHandlerOptions,
+): RegisteredMutation<"internal", ConvexArgs, Promise<ConvexReturns>> {
+	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
+	const databaseSchemas = databaseSchemasFromConfectSchema(
+		confectSchemaDefinition.confectSchema,
+	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
+
+	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
+	const config = buildHandler<ConfectDataModel, R, ConvexArgs, ConvexReturns>(
+		rpcWithProps,
+		handler as (payload: Rpc.Payload<R>) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, unknown>,
+		databaseSchemas,
+		options?.middleware ?? Context.empty(),
+		"mutation",
+	);
+	return internalMutationGeneric(config) as RegisteredMutation<"internal", ConvexArgs, Promise<ConvexReturns>>;
+}
+
+export function internalAction<
+	ConfectSchema extends GenericConfectSchema,
+	R extends Rpc.Any,
+	ConvexArgs extends DefaultFunctionArgs = RpcPayloadEncoded<R> & DefaultFunctionArgs,
+	ConvexReturns = RpcExitEncoded<R>,
+>(
+	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
+	rpc: R,
+	handler: HandlerFn<R, ConfectActionCtxFor<ConfectSchema>>,
+	options?: RpcHandlerOptions,
+): RegisteredAction<"internal", ConvexArgs, Promise<ConvexReturns>> {
+	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
+	const databaseSchemas = databaseSchemasFromConfectSchema(
+		confectSchemaDefinition.confectSchema,
+	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
+
+	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
+	const config = buildHandler<ConfectDataModel, R, ConvexArgs, ConvexReturns>(
+		rpcWithProps,
+		handler as (payload: Rpc.Payload<R>) => Effect.Effect<Rpc.Success<R>, Rpc.Error<R>, unknown>,
+		databaseSchemas,
+		options?.middleware ?? Context.empty(),
+		"action",
+	);
+	return internalActionGeneric(config) as RegisteredAction<"internal", ConvexArgs, Promise<ConvexReturns>>;
+}
+
+export type ExtractMiddleware<R extends Rpc.Any> = R extends Rpc.Rpc<
+	infer _Tag,
+	infer _Payload,
+	infer _Success,
+	infer _Error,
+	infer Middleware
+> ? Middleware : never;
+
+export const makeRpcMiddlewareContext = <
+	M extends RpcMiddleware.TagClassAny,
+	Implementations extends { [K in M["key"]]: Context.Tag.Service<Extract<M, { key: K }>> }
+>(
+	implementations: Implementations
+): Context.Context<M> => {
+	let ctx = Context.empty() as Context.Context<M>;
+	for (const [key, impl] of Object.entries(implementations)) {
+		const tag = { key } as unknown as Context.Tag<M, Context.Tag.Service<M>>;
+		ctx = Context.add(ctx, tag, impl as Context.Tag.Service<M>);
 	}
-	if (functionType === "query") return internalQueryGeneric(config);
-	if (functionType === "mutation") return internalMutationGeneric(config);
-	return internalActionGeneric(config);
-};
-
-export const query = <
-	ConfectSchema extends GenericConfectSchema,
-	R extends Rpc.Any,
->(
-	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
-	rpc: R,
-	handler: HandlerFn<R, ConfectQueryCtxFor<ConfectSchema>>,
-): QueryResult<"public"> => {
-	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
-	const databaseSchemas = databaseSchemasFromConfectSchema(
-		confectSchemaDefinition.confectSchema,
-	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
-
-	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
-	return buildHandler<ConfectDataModel>(
-		rpcWithProps,
-		handler as (payload: unknown) => Effect.Effect<unknown, unknown, unknown>,
-		databaseSchemas,
-		Context.empty(),
-		"query",
-		"public",
-	) as QueryResult<"public">;
-};
-
-export const mutation = <
-	ConfectSchema extends GenericConfectSchema,
-	R extends Rpc.Any,
->(
-	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
-	rpc: R,
-	handler: HandlerFn<R, ConfectMutationCtxFor<ConfectSchema>>,
-): MutationResult<"public"> => {
-	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
-	const databaseSchemas = databaseSchemasFromConfectSchema(
-		confectSchemaDefinition.confectSchema,
-	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
-
-	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
-	return buildHandler<ConfectDataModel>(
-		rpcWithProps,
-		handler as (payload: unknown) => Effect.Effect<unknown, unknown, unknown>,
-		databaseSchemas,
-		Context.empty(),
-		"mutation",
-		"public",
-	) as MutationResult<"public">;
-};
-
-export const action = <
-	ConfectSchema extends GenericConfectSchema,
-	R extends Rpc.Any,
->(
-	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
-	rpc: R,
-	handler: HandlerFn<R, ConfectActionCtxFor<ConfectSchema>>,
-): ActionResult<"public"> => {
-	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
-	const databaseSchemas = databaseSchemasFromConfectSchema(
-		confectSchemaDefinition.confectSchema,
-	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
-
-	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
-	return buildHandler<ConfectDataModel>(
-		rpcWithProps,
-		handler as (payload: unknown) => Effect.Effect<unknown, unknown, unknown>,
-		databaseSchemas,
-		Context.empty(),
-		"action",
-		"public",
-	) as ActionResult<"public">;
-};
-
-export const internalQuery = <
-	ConfectSchema extends GenericConfectSchema,
-	R extends Rpc.Any,
->(
-	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
-	rpc: R,
-	handler: HandlerFn<R, ConfectQueryCtxFor<ConfectSchema>>,
-): QueryResult<"internal"> => {
-	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
-	const databaseSchemas = databaseSchemasFromConfectSchema(
-		confectSchemaDefinition.confectSchema,
-	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
-
-	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
-	return buildHandler<ConfectDataModel>(
-		rpcWithProps,
-		handler as (payload: unknown) => Effect.Effect<unknown, unknown, unknown>,
-		databaseSchemas,
-		Context.empty(),
-		"query",
-		"internal",
-	) as QueryResult<"internal">;
-};
-
-export const internalMutation = <
-	ConfectSchema extends GenericConfectSchema,
-	R extends Rpc.Any,
->(
-	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
-	rpc: R,
-	handler: HandlerFn<R, ConfectMutationCtxFor<ConfectSchema>>,
-): MutationResult<"internal"> => {
-	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
-	const databaseSchemas = databaseSchemasFromConfectSchema(
-		confectSchemaDefinition.confectSchema,
-	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
-
-	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
-	return buildHandler<ConfectDataModel>(
-		rpcWithProps,
-		handler as (payload: unknown) => Effect.Effect<unknown, unknown, unknown>,
-		databaseSchemas,
-		Context.empty(),
-		"mutation",
-		"internal",
-	) as MutationResult<"internal">;
-};
-
-export const internalAction = <
-	ConfectSchema extends GenericConfectSchema,
-	R extends Rpc.Any,
->(
-	confectSchemaDefinition: ConfectSchemaDefinition<ConfectSchema>,
-	rpc: R,
-	handler: HandlerFn<R, ConfectActionCtxFor<ConfectSchema>>,
-): ActionResult<"internal"> => {
-	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
-	const databaseSchemas = databaseSchemasFromConfectSchema(
-		confectSchemaDefinition.confectSchema,
-	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
-
-	const rpcWithProps = rpc as unknown as AnyRpcWithProps;
-	return buildHandler<ConfectDataModel>(
-		rpcWithProps,
-		handler as (payload: unknown) => Effect.Effect<unknown, unknown, unknown>,
-		databaseSchemas,
-		Context.empty(),
-		"action",
-		"internal",
-	) as ActionResult<"internal">;
+	return ctx;
 };

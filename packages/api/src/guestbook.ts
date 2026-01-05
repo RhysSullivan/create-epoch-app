@@ -1,6 +1,7 @@
 import { Rpc, RpcGroup } from "@effect/rpc";
 import { ConvexFunctionType } from "@packages/confect/convex";
 import { Schema } from "effect";
+import { AuthMiddleware, AuthenticationError } from "./middleware";
 import { AuthPayload } from "./shared";
 
 export class ValidationError extends Schema.TaggedError<ValidationError>()(
@@ -20,7 +21,10 @@ const GuestbookEntrySchema = Schema.Struct({
 export const list = Rpc.make("list", {
 	payload: AuthPayload.fields,
 	success: Schema.Array(GuestbookEntrySchema),
-}).annotate(ConvexFunctionType, "query");
+	error: AuthenticationError,
+})
+	.middleware(AuthMiddleware)
+	.annotate(ConvexFunctionType, "query");
 
 export const add = Rpc.make("add", {
 	payload: {
@@ -29,7 +33,9 @@ export const add = Rpc.make("add", {
 		message: Schema.String,
 	},
 	success: Schema.String,
-	error: ValidationError,
-}).annotate(ConvexFunctionType, "mutation");
+	error: Schema.Union(ValidationError, AuthenticationError),
+})
+	.middleware(AuthMiddleware)
+	.annotate(ConvexFunctionType, "mutation");
 
 export class GuestbookRpcs extends RpcGroup.make(list, add) {}

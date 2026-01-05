@@ -3,7 +3,7 @@
 import { Result } from "@effect-atom/atom";
 import { useAtomValue, useAtom } from "@effect-atom/atom-react";
 import {
-	useGuestbookList,
+	useGuestbookSubscription,
 	useGuestbookAdd,
 } from "@packages/react/guestbook-rpc";
 import { Button } from "@packages/ui/components/button";
@@ -12,7 +12,7 @@ import { Cause } from "effect";
 import { useState } from "react";
 
 export function GuestbookDemo() {
-	const result = useGuestbookList();
+	const result = useGuestbookSubscription();
 	const [addResult, addEntry] = useGuestbookAdd();
 	const [name, setName] = useState("");
 	const [message, setMessage] = useState("");
