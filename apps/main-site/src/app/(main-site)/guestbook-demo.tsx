@@ -1,47 +1,35 @@
 "use client";
 
-import { useAtomValue, useAtomSet } from "@effect-atom/atom-react";
-import { ExitResult } from "@packages/confect/client";
-import { entriesAtom, addEntryAtom, Result } from "@packages/react/guestbook";
+import { Result } from "@effect-atom/atom";
+import { useAtomValue, useAtom } from "@effect-atom/atom-react";
+import {
+	useGuestbookList,
+	useGuestbookAdd,
+} from "@packages/react/guestbook-rpc";
 import { Button } from "@packages/ui/components/button";
 import { Input } from "@packages/ui/components/input";
-import { Cause, Exit } from "effect";
+import { Cause } from "effect";
 import { useState } from "react";
 
 export function GuestbookDemo() {
-	const result = useAtomValue(entriesAtom);
-	const addEntry = useAtomSet(addEntryAtom, { mode: "promiseExit" });
+	const result = useGuestbookList();
+	const [addResult, addEntry] = useGuestbookAdd();
 	const [name, setName] = useState("");
 	const [message, setMessage] = useState("");
-	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [error, setError] = useState<string | null>(null);
 
-	const handleSubmit = async (e: React.FormEvent) => {
+	const isSubmitting = Result.isWaiting(addResult);
+
+	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!name.trim() || !message.trim() || isSubmitting) return;
 
-		setIsSubmitting(true);
-		setError(null);
-		try {
-			const clientExit = await addEntry({
-				name: name.trim(),
-				message: message.trim(),
-			});
-			if (Exit.isSuccess(clientExit)) {
-				const serverExit = clientExit.value;
-				if (ExitResult.isSuccess(serverExit)) {
-					setName("");
-					setMessage("");
-				} else {
-					const failure = ExitResult.getFailureOrNull(serverExit);
-					if (failure) {
-						setError(failure.message);
-					}
-				}
-			}
-		} finally {
-			setIsSubmitting(false);
-		}
+		addEntry({
+			name: name.trim(),
+			message: message.trim(),
+		});
+
+		setName("");
+		setMessage("");
 	};
 
 	return (
@@ -71,6 +59,12 @@ export function GuestbookDemo() {
 						{isSubmitting ? "Signing..." : "Sign Guestbook"}
 					</Button>
 				</form>
+
+				{Result.isFailure(addResult) && (
+					<div className="mt-3 rounded bg-destructive/10 p-3 text-sm text-destructive">
+						Error: {Cause.pretty(addResult.cause)}
+					</div>
+				)}
 			</div>
 
 			<div className="rounded-lg border bg-card p-6">
@@ -89,25 +83,23 @@ export function GuestbookDemo() {
 					</div>
 				)}
 
-				{Result.isSuccess(result) && (
-					<>
-						{result.value.length === 0 ? (
-							<p className="text-muted-foreground">
-								No messages yet. Be the first to sign!
-							</p>
-						) : (
-							<ul className="space-y-3">
-								{result.value.map((entry) => (
-									<li key={entry._id} className="rounded-md bg-muted/50 p-3">
-										<p className="font-medium">{entry.name}</p>
-										<p className="mt-1 text-sm text-muted-foreground">
-											{entry.message}
-										</p>
-									</li>
-								))}
-							</ul>
-						)}
-					</>
+				{Result.isSuccess(result) && result.value.length === 0 && (
+					<p className="text-muted-foreground">
+						No messages yet. Be the first to sign!
+					</p>
+				)}
+
+				{Result.isSuccess(result) && result.value.length > 0 && (
+					<ul className="space-y-3">
+						{result.value.map((entry) => (
+							<li key={entry._id} className="rounded-md bg-muted/50 p-3">
+								<p className="font-medium">{entry.name}</p>
+								<p className="mt-1 text-sm text-muted-foreground">
+									{entry.message}
+								</p>
+							</li>
+						))}
+					</ul>
 				)}
 			</div>
 		</div>

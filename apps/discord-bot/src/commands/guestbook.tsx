@@ -1,10 +1,12 @@
-import { AtomConvex, ExitResult } from "@packages/confect/client";
+import { Result } from "@effect-atom/atom";
+import { GuestbookRpcs } from "@packages/api/guestbook";
+import type { AuthPayload } from "@packages/api/shared";
+import { RpcClient } from "@packages/confect/rpc";
 import { api } from "@packages/database/convex/_generated/api";
 import {
 	ActionRow,
 	Button,
 	Container,
-	Result,
 	TextDisplay,
 	useAtomSet,
 	useAtomValue,
@@ -12,19 +14,20 @@ import {
 import { Cause } from "effect";
 import { useState } from "react";
 
-class GuestbookClient extends AtomConvex.Tag<GuestbookClient>()(
-	"GuestbookClient",
-	{
-		url: process.env.CONVEPUBLIC_X_URL ?? "",
-	},
-) {}
-
-const entriesAtom = GuestbookClient.subscription(api.public.guestbook.list, {});
-const addEntryAtom = GuestbookClient.mutation(api.public.guestbook.add);
+const guestbookClient = RpcClient.makeWithShared<
+	typeof GuestbookRpcs,
+	typeof api.rpc.guestbook,
+	AuthPayload
+>(
+	GuestbookRpcs,
+	api.rpc.guestbook,
+	{ url: process.env.CONVEX_URL ?? "" },
+	() => ({ privateAccessKey: process.env.PRIVATE_ACCESS_KEY ?? "" }),
+);
 
 export function GuestbookCommand() {
-	const result = useAtomValue(entriesAtom);
-	const addEntry = useAtomSet(addEntryAtom);
+	const result = useAtomValue(guestbookClient.list({}));
+	const addEntry = useAtomSet(guestbookClient.add);
 	const [isAdding, setIsAdding] = useState(false);
 
 	const handleAdd = async () => {

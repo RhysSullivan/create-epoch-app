@@ -14,7 +14,7 @@
 		"deploy": "bun run with-env:prod convex deploy",
 		"codegen": "bunx convex codegen",
 		"generate:auth-schema": "cd convex/betterAuth && bunx @better-auth/cli generate -y --output generatedSchema.ts",
-		"dev": "bun run scripts/dev.ts",
+		"dev": "bun convex dev",
 		"typecheck": "tsgo -p convex/tsconfig.json --noEmit & tsgo -p tsconfig.json --noEmit & wait",
 		"typecheck:slow": "tsc -p convex/tsconfig.json --noEmit & tsc -p tsconfig.json --noEmit & wait",
 		"clean": "rm -rf node_modules .turbo",

@@ -35,7 +35,7 @@ import {
 	compileReturnsSchema,
 } from "../server/schema-to-validator";
 import type * as Rpc from "./Rpc";
-import type { HandlersFrom, RpcGroup, RpcsOf } from "./RpcGroup";
+import type { HandlersFrom, RpcGroup } from "./RpcGroup";
 
 type ConvexModuleResult<R extends Rpc.Any, Visibility extends "public" | "internal"> = {
 	[K in R["_tag"]]: 

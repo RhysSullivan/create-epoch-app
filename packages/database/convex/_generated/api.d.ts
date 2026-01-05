@@ -14,6 +14,7 @@ import type * as private_posts from "../private/posts.js";
 import type * as private_users from "../private/users.js";
 import type * as public_posts from "../public/posts.js";
 import type * as public_users from "../public/users.js";
+import type * as rpc_admin from "../rpc/admin.js";
 import type * as rpc_guestbook from "../rpc/guestbook.js";
 import type * as shared_auth from "../shared/auth.js";
 import type * as shared_authIdentity from "../shared/authIdentity.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   "private/users": typeof private_users;
   "public/posts": typeof public_posts;
   "public/users": typeof public_users;
+  "rpc/admin": typeof rpc_admin;
   "rpc/guestbook": typeof rpc_guestbook;
   "shared/auth": typeof shared_auth;
   "shared/authIdentity": typeof shared_authIdentity;

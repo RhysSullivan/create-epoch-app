@@ -1,13 +1,13 @@
 import { GuestbookRpcs, ValidationError } from "@packages/api/guestbook";
 import { createConvexModule } from "@packages/confect/rpc";
 import { Effect } from "effect";
-import { confectSchema, ConfectMutationCtx, ConfectQueryCtx } from "../confect";
+import { ConfectMutationCtx, ConfectQueryCtx, confectSchema } from "../confect";
 
 export const { list, add } = createConvexModule(
 	confectSchema,
 	GuestbookRpcs,
 	GuestbookRpcs.handlers({
-		list: (args) =>
+		list: () =>
 			Effect.gen(function* () {
 				const ctx = yield* ConfectQueryCtx;
 				const entries = yield* ctx.db.query("guestbook").order("desc").take(50);

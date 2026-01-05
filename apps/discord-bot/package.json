@@ -13,6 +13,8 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
+		"@effect-atom/atom": "catalog:",
+		"@packages/api": "workspace:*",
 		"@packages/confect": "workspace:*",
 		"@packages/database": "workspace:*",
 		"@packages/observability": "workspace:*",

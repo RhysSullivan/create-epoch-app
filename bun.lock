@@ -16,6 +16,8 @@
     "apps/discord-bot": {
       "name": "@packages/discord-bot",
       "dependencies": {
+        "@effect-atom/atom": "catalog:",
+        "@packages/api": "workspace:*",
         "@packages/confect": "workspace:*",
         "@packages/database": "workspace:*",
         "@packages/observability": "workspace:*",
@@ -35,6 +37,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@convex-dev/better-auth": "catalog:",
+        "@effect-atom/atom": "catalog:",
         "@effect-atom/atom-react": "catalog:",
         "@packages/confect": "workspace:*",
         "@packages/database": "workspace:*",
