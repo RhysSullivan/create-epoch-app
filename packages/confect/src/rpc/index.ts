@@ -1,5 +1,4 @@
-export * as Rpc from "./Rpc";
-export * as RpcGroup from "./RpcGroup";
-export * as RpcMiddleware from "./RpcMiddleware";
-export { createConvexModule, createInternalConvexModule } from "./ConvexAdapter";
+export { Rpc, RpcGroup } from "@effect/rpc";
+export { toModule, toInternalModule, toModuleQuery, toModuleMutation, toModuleAction } from "../convex/RpcConvex";
+export { ConvexFunctionType } from "../convex/ConvexFunctionType";
 export * as RpcClient from "./RpcClient";

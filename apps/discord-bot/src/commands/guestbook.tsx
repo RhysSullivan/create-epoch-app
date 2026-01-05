@@ -1,6 +1,5 @@
 import { Result } from "@effect-atom/atom";
 import { GuestbookRpcs } from "@packages/api/guestbook";
-import type { AuthPayload } from "@packages/api/shared";
 import { RpcClient } from "@packages/confect/rpc";
 import { api } from "@packages/database/convex/_generated/api";
 import {
@@ -14,11 +13,7 @@ import {
 import { Cause } from "effect";
 import { useState } from "react";
 
-const guestbookClient = RpcClient.makeWithShared<
-	typeof GuestbookRpcs,
-	typeof api.rpc.guestbook,
-	AuthPayload
->(
+const guestbookClient = RpcClient.makeWithShared(
 	GuestbookRpcs,
 	api.rpc.guestbook,
 	{ url: process.env.CONVEX_URL ?? "" },

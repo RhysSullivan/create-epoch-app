@@ -1,14 +1,9 @@
 import { useAtomValue, useAtom } from "@effect-atom/atom-react";
 import { GuestbookRpcs } from "@packages/api/guestbook";
-import type { AuthPayload } from "@packages/api/shared";
 import { RpcClient } from "@packages/confect/rpc";
 import { api } from "@packages/database/convex/_generated/api";
 
-const guestbookClient = RpcClient.makeWithShared<
-	typeof GuestbookRpcs,
-	typeof api.rpc.guestbook,
-	AuthPayload
->(
+const guestbookClient = RpcClient.makeWithShared(
 	GuestbookRpcs,
 	api.rpc.guestbook,
 	{ url: process.env.NEXT_PUBLIC_CONVEX_URL ?? "" },

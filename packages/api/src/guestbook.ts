@@ -1,4 +1,5 @@
-import { Rpc, RpcGroup } from "@packages/confect/rpc";
+import { Rpc, RpcGroup } from "@effect/rpc";
+import { ConvexFunctionType } from "@packages/confect/convex";
 import { Schema } from "effect";
 import { AuthPayload } from "./shared";
 
@@ -16,23 +17,19 @@ const GuestbookEntrySchema = Schema.Struct({
 	message: Schema.String,
 });
 
-export const list = Rpc.Query("list")
-	.setPayload(AuthPayload)
-	.setSuccess(Schema.Array(GuestbookEntrySchema));
+export const list = Rpc.make("list", {
+	payload: AuthPayload.fields,
+	success: Schema.Array(GuestbookEntrySchema),
+}).annotate(ConvexFunctionType, "query");
 
-export const add = Rpc.Mutation("add")
-	.setPayload(
-		Schema.extend(
-			AuthPayload,
-			Schema.Struct({
-				name: Schema.String,
-				message: Schema.String,
-			}),
-		),
-	)
-	.setSuccess(Schema.String)
-	.setError(ValidationError);
+export const add = Rpc.make("add", {
+	payload: {
+		...AuthPayload.fields,
+		name: Schema.String,
+		message: Schema.String,
+	},
+	success: Schema.String,
+	error: ValidationError,
+}).annotate(ConvexFunctionType, "mutation");
 
-export const GuestbookRpcs = RpcGroup.make(list, add);
-
-export type GuestbookRpcs = typeof GuestbookRpcs;
+export class GuestbookRpcs extends RpcGroup.make(list, add) {}

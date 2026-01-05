@@ -68,6 +68,7 @@
       "name": "@packages/api",
       "version": "0.0.0",
       "dependencies": {
+        "@effect/rpc": "catalog:",
         "@packages/confect": "workspace:*",
         "effect": "catalog:",
       },
@@ -83,6 +84,7 @@
         "@effect-atom/atom": "catalog:",
         "@effect-atom/atom-react": "catalog:",
         "@effect/platform": "catalog:",
+        "@effect/rpc": "catalog:",
         "convex": "catalog:",
         "effect": "catalog:",
       },
@@ -288,6 +290,7 @@
     "@effect-atom/atom": "^0.4.11",
     "@effect-atom/atom-react": "^0.4.4",
     "@effect/platform": "^0.93.6",
+    "@effect/rpc": "^0.72.2",
     "@tailwindcss/postcss": "^4.1.11",
     "@types/node": "^20.19.9",
     "@types/react": "^19.1.9",

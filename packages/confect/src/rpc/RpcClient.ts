@@ -1,13 +1,21 @@
+import { Rpc, RpcGroup } from "@effect/rpc";
 import { Atom, Result } from "@effect-atom/atom";
 import type { FunctionReference } from "convex/server";
-import { Effect, Exit, Schema, Stream } from "effect";
+import { Context, Effect, Exit, Option, Schema, Stream } from "effect";
 import { ConvexClient, ConvexClientLayer } from "../client/convex-client";
-import type * as Rpc from "./Rpc";
-import type { RpcGroup, RpcsOf } from "./RpcGroup";
+import { ConvexFunctionType, type FunctionType } from "../convex/ConvexFunctionType";
 
 export interface RpcClientConfig {
 	readonly url: string;
 }
+
+type AnyRpcWithProps = Rpc.AnyWithProps;
+
+const getFunctionType = (rpc: AnyRpcWithProps): FunctionType =>
+	Option.getOrElse(
+		Context.getOption(rpc.annotations, ConvexFunctionType),
+		() => "query" as FunctionType,
+	);
 
 type QueryMethod<R extends Rpc.Any> = (
 	payload: Rpc.Payload<R>,
@@ -25,22 +33,6 @@ type ActionMethod<R extends Rpc.Any> = Atom.AtomResultFn<
 	Rpc.Error<R>
 >;
 
-type RpcMethod<R extends Rpc.Any> = R extends Rpc.Rpc<
-	infer _Tag,
-	infer Type,
-	infer _Payload,
-	infer _Success,
-	infer _Error
->
-	? Type extends "query"
-		? QueryMethod<R>
-		: Type extends "mutation"
-			? MutationMethod<R>
-			: Type extends "action"
-				? ActionMethod<R>
-				: never
-	: never;
-
 type QueryMethodWithShared<R extends Rpc.Any, Shared extends Record<string, unknown>> = (
 	payload: Omit<Rpc.Payload<R>, keyof Shared>,
 ) => Atom.Atom<Result.Result<Rpc.Success<R>, Rpc.Error<R>>>;
@@ -57,62 +49,77 @@ type ActionMethodWithShared<R extends Rpc.Any, Shared extends Record<string, unk
 	Rpc.Error<R>
 >;
 
-type RpcMethodWithShared<R extends Rpc.Any, Shared extends Record<string, unknown>> = R extends Rpc.Rpc<
-	infer _Tag,
-	infer Type,
-	infer _Payload,
-	infer _Success,
-	infer _Error
->
-	? Type extends "query"
-		? QueryMethodWithShared<R, Shared>
-		: Type extends "mutation"
-			? MutationMethodWithShared<R, Shared>
-			: Type extends "action"
-				? ActionMethodWithShared<R, Shared>
-				: never
-	: never;
-
 type ConvexApiModule = Record<
 	string,
 	FunctionReference<"query"> | FunctionReference<"mutation"> | FunctionReference<"action">
 >;
 
+type ExtractFunctionType<F> = F extends { _type: infer T } ? T : never;
+
+type RpcMethodForFunctionType<R extends Rpc.Any, FnType extends "query" | "mutation" | "action"> =
+	FnType extends "query" ? QueryMethod<R> :
+	FnType extends "mutation" ? MutationMethod<R> :
+	FnType extends "action" ? ActionMethod<R> :
+	never;
+
+type RpcMethodWithSharedForFunctionType<
+	R extends Rpc.Any,
+	Shared extends Record<string, unknown>,
+	FnType extends "query" | "mutation" | "action"
+> =
+	FnType extends "query" ? QueryMethodWithShared<R, Shared> :
+	FnType extends "mutation" ? MutationMethodWithShared<R, Shared> :
+	FnType extends "action" ? ActionMethodWithShared<R, Shared> :
+	never;
+
 export type RpcClient<
-	Group extends RpcGroup<Rpc.Any>,
+	Rpcs extends Rpc.Any,
 	Api extends ConvexApiModule = ConvexApiModule,
 > = {
 	readonly runtime: Atom.AtomRuntime<ConvexClient>;
 } & {
-	readonly [K in keyof Api & RpcsOf<Group>["_tag"]]: RpcMethod<
-		Extract<RpcsOf<Group>, { _tag: K }>
+	readonly [K in keyof Api & Rpcs["_tag"]]: RpcMethodForFunctionType<
+		Extract<Rpcs, { _tag: K }>,
+		ExtractFunctionType<Api[K]>
 	>;
 };
 
+export type RpcClientFromGroup<
+	Group extends RpcGroup.Any,
+	Api extends ConvexApiModule = ConvexApiModule,
+> = RpcClient<RpcGroup.Rpcs<Group>, Api>;
+
 export type RpcClientWithShared<
-	Group extends RpcGroup<Rpc.Any>,
+	Rpcs extends Rpc.Any,
 	Api extends ConvexApiModule,
 	Shared extends Record<string, unknown>,
 > = {
 	readonly runtime: Atom.AtomRuntime<ConvexClient>;
 } & {
-	readonly [K in keyof Api & RpcsOf<Group>["_tag"]]: RpcMethodWithShared<
-		Extract<RpcsOf<Group>, { _tag: K }>,
-		Shared
+	readonly [K in keyof Api as K extends Rpcs["_tag"] ? K : never]: RpcMethodWithSharedForFunctionType<
+		Extract<Rpcs, { _tag: K }>,
+		Shared,
+		ExtractFunctionType<Api[K]>
 	>;
 };
 
-export const make = <Group extends RpcGroup<Rpc.Any>, Api extends ConvexApiModule>(
-	group: Group,
+export type RpcClientWithSharedFromGroup<
+	Group extends RpcGroup.Any,
+	Api extends ConvexApiModule,
+	Shared extends Record<string, unknown>,
+> = RpcClientWithShared<RpcGroup.Rpcs<Group>, Api, Shared>;
+
+export const make = <Rpcs extends Rpc.Any, Api extends ConvexApiModule>(
+	group: RpcGroup.RpcGroup<Rpcs>,
 	convexApi: Api,
 	config: RpcClientConfig,
-): RpcClient<Group, Api> => {
+): RpcClient<Rpcs, Api> => {
 	const runtime = Atom.runtime(ConvexClientLayer(config.url));
 
 	const cache = new Map<string, unknown>();
 
 	const decodeExit = (
-		rpc: Rpc.Any,
+		rpc: AnyRpcWithProps,
 		encodedExit: Schema.ExitEncoded<unknown, unknown, unknown>,
 	): Effect.Effect<unknown, unknown, never> => {
 		const exitSchema = Schema.Exit({
@@ -130,7 +137,7 @@ export const make = <Group extends RpcGroup<Rpc.Any>, Api extends ConvexApiModul
 		});
 	};
 
-	const createQueryMethod = (rpc: Rpc.Any, apiRef: FunctionReference<"query">) => {
+	const createQueryMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"query">) => {
 		const subscriptionCache = new Map<string, Atom.Atom<Result.Result<unknown, unknown>>>();
 
 		return (payload: unknown) => {
@@ -161,7 +168,7 @@ export const make = <Group extends RpcGroup<Rpc.Any>, Api extends ConvexApiModul
 		};
 	};
 
-	const createMutationMethod = (rpc: Rpc.Any, apiRef: FunctionReference<"mutation">) => {
+	const createMutationMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"mutation">) => {
 		return runtime.fn(
 			Effect.fnUntraced(function* (payload: unknown) {
 				const client = yield* ConvexClient;
@@ -177,7 +184,7 @@ export const make = <Group extends RpcGroup<Rpc.Any>, Api extends ConvexApiModul
 		);
 	};
 
-	const createActionMethod = (rpc: Rpc.Any, apiRef: FunctionReference<"action">) => {
+	const createActionMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"action">) => {
 		return runtime.fn(
 			Effect.fnUntraced(function* (payload: unknown) {
 				const client = yield* ConvexClient;
@@ -195,42 +202,44 @@ export const make = <Group extends RpcGroup<Rpc.Any>, Api extends ConvexApiModul
 
 	const client: Record<string, unknown> = { runtime };
 
-	for (const [tag, rpc] of group.rpcs) {
+	for (const [tag, rpc] of group.requests) {
+		const rpcWithProps = rpc as never as AnyRpcWithProps;
 		const apiRef = convexApi[tag];
 		if (!apiRef) {
 			throw new Error(`Missing API reference for RPC: ${tag}`);
 		}
 
 		if (!cache.has(tag)) {
-			if (rpc._type === "query") {
-				cache.set(tag, createQueryMethod(rpc, apiRef as FunctionReference<"query">));
-			} else if (rpc._type === "mutation") {
-				cache.set(tag, createMutationMethod(rpc, apiRef as FunctionReference<"mutation">));
+			const functionType = getFunctionType(rpcWithProps);
+			if (functionType === "query") {
+				cache.set(tag, createQueryMethod(rpcWithProps, apiRef as FunctionReference<"query">));
+			} else if (functionType === "mutation") {
+				cache.set(tag, createMutationMethod(rpcWithProps, apiRef as FunctionReference<"mutation">));
 			} else {
-				cache.set(tag, createActionMethod(rpc, apiRef as FunctionReference<"action">));
+				cache.set(tag, createActionMethod(rpcWithProps, apiRef as FunctionReference<"action">));
 			}
 		}
 
 		client[tag] = cache.get(tag);
 	}
 
-	return client as RpcClient<Group, Api>;
+	return client as RpcClient<Rpcs, Api>;
 };
 
 export const makeWithShared = <
-	Group extends RpcGroup<Rpc.Any>,
+	Rpcs extends Rpc.Any,
 	Api extends ConvexApiModule,
 	Shared extends Record<string, unknown>,
 >(
-	group: Group,
+	group: RpcGroup.RpcGroup<Rpcs>,
 	convexApi: Api,
 	config: RpcClientConfig,
 	getShared: () => Shared,
-): RpcClientWithShared<Group, Api, Shared> => {
+): RpcClientWithShared<Rpcs, Api, Shared> => {
 	const runtime = Atom.runtime(ConvexClientLayer(config.url));
 
 	const decodeExit = (
-		rpc: Rpc.Any,
+		rpc: AnyRpcWithProps,
 		encodedExit: Schema.ExitEncoded<unknown, unknown, unknown>,
 	): Effect.Effect<unknown, unknown, never> => {
 		const exitSchema = Schema.Exit({
@@ -248,7 +257,7 @@ export const makeWithShared = <
 		});
 	};
 
-	const createQueryMethod = (rpc: Rpc.Any, apiRef: FunctionReference<"query">) => {
+	const createQueryMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"query">) => {
 		const subscriptionCache = new Map<string, Atom.Atom<Result.Result<unknown, unknown>>>();
 
 		return (partialPayload: unknown) => {
@@ -280,7 +289,7 @@ export const makeWithShared = <
 		};
 	};
 
-	const createMutationMethod = (rpc: Rpc.Any, apiRef: FunctionReference<"mutation">) => {
+	const createMutationMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"mutation">) => {
 		return runtime.fn(
 			Effect.fnUntraced(function* (partialPayload: unknown) {
 				const payload = { ...getShared(), ...(partialPayload as Record<string, unknown>) };
@@ -297,7 +306,7 @@ export const makeWithShared = <
 		);
 	};
 
-	const createActionMethod = (rpc: Rpc.Any, apiRef: FunctionReference<"action">) => {
+	const createActionMethod = (rpc: AnyRpcWithProps, apiRef: FunctionReference<"action">) => {
 		return runtime.fn(
 			Effect.fnUntraced(function* (partialPayload: unknown) {
 				const payload = { ...getShared(), ...(partialPayload as Record<string, unknown>) };
@@ -316,20 +325,22 @@ export const makeWithShared = <
 
 	const client: Record<string, unknown> = { runtime };
 
-	for (const [tag, rpc] of group.rpcs) {
+	for (const [tag, rpc] of group.requests) {
+		const rpcWithProps = rpc as never as AnyRpcWithProps;
 		const apiRef = convexApi[tag];
 		if (!apiRef) {
 			throw new Error(`Missing API reference for RPC: ${tag}`);
 		}
 
-		if (rpc._type === "query") {
-			client[tag] = createQueryMethod(rpc, apiRef as FunctionReference<"query">);
-		} else if (rpc._type === "mutation") {
-			client[tag] = createMutationMethod(rpc, apiRef as FunctionReference<"mutation">);
+		const functionType = getFunctionType(rpcWithProps);
+		if (functionType === "query") {
+			client[tag] = createQueryMethod(rpcWithProps, apiRef as FunctionReference<"query">);
+		} else if (functionType === "mutation") {
+			client[tag] = createMutationMethod(rpcWithProps, apiRef as FunctionReference<"mutation">);
 		} else {
-			client[tag] = createActionMethod(rpc, apiRef as FunctionReference<"action">);
+			client[tag] = createActionMethod(rpcWithProps, apiRef as FunctionReference<"action">);
 		}
 	}
 
-	return client as RpcClientWithShared<Group, Api, Shared>;
+	return client as RpcClientWithShared<Rpcs, Api, Shared>;
 };
