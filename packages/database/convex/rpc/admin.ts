@@ -28,22 +28,23 @@ class AdminMiddleware extends RpcMiddleware.Tag<AdminMiddleware>()(
 	},
 ) {}
 
-const adminMiddlewareImpl: RpcMiddleware.RpcMiddleware<
-	void,
-	UnauthorizedError
-> = ({ payload }) => {
-	const adminKey = (payload as { adminKey?: string })?.adminKey;
-	if (adminKey !== ADMIN_KEY) {
-		return Effect.fail(new UnauthorizedError({ message: "Invalid admin key" }));
-	}
-	return Effect.void;
-};
-
 const factory = createRpcFactory({
 	schema: confectSchema,
 	basePayload: AdminPayload,
-	middleware: AdminMiddleware,
-	middlewareImpl: adminMiddlewareImpl,
+	middlewares: [
+		{
+			tag: AdminMiddleware,
+			impl: AdminMiddleware.of(({ payload }) => {
+				const adminKey = (payload as { adminKey?: string })?.adminKey;
+				if (adminKey !== ADMIN_KEY) {
+					return Effect.fail(
+						new UnauthorizedError({ message: "Invalid admin key" }),
+					);
+				}
+				return Effect.void;
+			}),
+		},
+	],
 });
 
 const UserSchema = Schema.Struct({

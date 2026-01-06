@@ -14,24 +14,6 @@ const AuthPayload = {
 	privateAccessKey: Schema.String,
 };
 
-const authMiddlewareImpl: RpcMiddleware.RpcMiddleware<
-	{ readonly id: string; readonly email: string },
-	AuthenticationError
-> = ({ payload }) => {
-	const token = (payload as { privateAccessKey?: string })?.privateAccessKey;
-	if (!token) {
-		return Effect.fail(
-			new AuthenticationError({ message: "Missing authentication token" }),
-		);
-	}
-	if (token !== VALID_ACCESS_KEY) {
-		return Effect.fail(
-			new AuthenticationError({ message: "Invalid access key" }),
-		);
-	}
-	return Effect.succeed({ id: "system", email: "system@example.com" });
-};
-
 class AuthMiddleware extends RpcMiddleware.Tag<AuthMiddleware>()(
 	"AuthMiddleware",
 	{
@@ -43,8 +25,33 @@ class AuthMiddleware extends RpcMiddleware.Tag<AuthMiddleware>()(
 const factory = createRpcFactory({
 	schema: confectSchema,
 	basePayload: AuthPayload,
-	middleware: AuthMiddleware,
-	middlewareImpl: authMiddlewareImpl,
+	middlewares: [
+		{
+			tag: AuthMiddleware,
+			impl: AuthMiddleware.of(({ payload }) => {
+				const token = (payload as { privateAccessKey?: string })
+					?.privateAccessKey;
+				if (!token) {
+					return Effect.fail(
+						new AuthenticationError({
+							message: "Missing authentication token",
+						}),
+					);
+				}
+				if (token !== VALID_ACCESS_KEY) {
+					return Effect.fail(
+						new AuthenticationError({ message: "Invalid access key" }),
+					);
+				}
+				return Effect.succeed({ id: "system", email: "system@example.com" });
+			}),
+		},
+	],
+});
+
+const getSomeSecretData = Effect.gen(function* () {
+	yield* AuthenticatedUser;
+	return "some secret data";
 });
 
 export class ValidationError extends Schema.TaggedError<ValidationError>()(
@@ -87,6 +94,8 @@ export const guestbookModule = makeRpcModule({
 				const ctx = yield* ConfectMutationCtx;
 				const name = args.name.trim().slice(0, 50);
 				const message = args.message.trim().slice(0, 500);
+
+				const secret = yield* getSomeSecretData;
 
 				if (name.length === 0 || message.length === 0) {
 					yield* new ValidationError({

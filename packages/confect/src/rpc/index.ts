@@ -9,6 +9,7 @@ export {
 	type AnyRpcModule,
 	type InferModuleEndpoints,
 	type RpcFactoryConfig,
+	type MiddlewareEntry,
 	type InferRpc,
 	type InferFn,
 } from "./RpcBuilder";

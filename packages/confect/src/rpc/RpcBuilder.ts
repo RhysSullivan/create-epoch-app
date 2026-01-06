@@ -99,49 +99,58 @@ type MiddlewareProvides<T extends RpcMiddleware.TagClassAny> = T extends { reado
 
 type MiddlewareFailure<T extends RpcMiddleware.TagClassAny> = RpcMiddleware.TagClass.Failure<MiddlewareOptionsFromTag<T>>;
 
+export interface MiddlewareEntry<T extends RpcMiddleware.TagClassAny = RpcMiddleware.TagClassAny> {
+	readonly tag: T;
+	readonly impl: Context.Tag.Service<T>;
+}
+
+type MiddlewaresProvides<T extends ReadonlyArray<MiddlewareEntry>> = T[number] extends MiddlewareEntry<infer M>
+	? MiddlewareProvides<M>
+	: never;
+
+type MiddlewaresFailure<T extends ReadonlyArray<MiddlewareEntry>> = T[number] extends MiddlewareEntry<infer M>
+	? MiddlewareFailure<M>
+	: never;
+
 export interface RpcFactoryConfig<
 	ConfectSchema extends GenericConfectSchema,
 	BasePayload extends Schema.Struct.Fields = {},
-	Middleware extends RpcMiddleware.TagClassAny = never,
+	Middlewares extends ReadonlyArray<MiddlewareEntry> = [],
 > {
 	readonly schema: ConfectSchemaDefinition<ConfectSchema>;
 	readonly basePayload?: BasePayload;
-	readonly middleware?: Middleware;
-	readonly middlewareImpl?: Context.Tag.Service<Middleware>;
+	readonly middlewares?: Middlewares;
 }
 
 export const createRpcFactory = <
 	ConfectSchema extends GenericConfectSchema,
 	BasePayload extends Schema.Struct.Fields = {},
-	Middleware extends RpcMiddleware.TagClassAny = never,
+	Middlewares extends ReadonlyArray<MiddlewareEntry> = [],
 >(
-	config: RpcFactoryConfig<ConfectSchema, BasePayload, Middleware>,
+	config: RpcFactoryConfig<ConfectSchema, BasePayload, Middlewares>,
 ) => {
 	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
 	const databaseSchemas = databaseSchemasFromConfectSchema(
 		config.schema.confectSchema,
 	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
 	const basePayload = config.basePayload ?? ({} as BasePayload);
-	const middlewareTag = config.middleware;
-	const middlewareImpl = config.middlewareImpl;
+	const middlewares = config.middlewares ?? [];
 
 	type RawQueryCtx = GenericQueryCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
 	type RawMutationCtx = GenericMutationCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
 	type RawActionCtx = GenericActionCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
 
-	type MWProvides = MiddlewareProvides<Middleware>;
-	type MWFailure = MiddlewareFailure<Middleware>;
+	type MWProvides = MiddlewaresProvides<Middlewares>;
+	type MWFailure = MiddlewaresFailure<Middlewares>;
 
 	const applyMiddleware = <A, E, R>(
 		effect: Effect.Effect<A, E, R>,
 		payload: unknown,
 	): Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>> => {
-		if (!middlewareTag || !middlewareImpl) {
+		if (middlewares.length === 0) {
 			return effect as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
 		}
 
-		const middlewareTagWithProps = middlewareTag as RpcMiddleware.TagClassAnyWithProps;
-		const impl = middlewareImpl as RpcMiddleware.RpcMiddleware<unknown, unknown>;
 		const options = {
 			clientId: 0,
 			rpc: {} as Rpc.AnyWithProps,
@@ -149,17 +158,27 @@ export const createRpcFactory = <
 			headers: {} as import("@effect/platform/Headers").Headers,
 		};
 
-		if (middlewareTagWithProps.provides !== undefined) {
-			return Effect.provideServiceEffect(
-				effect as Effect.Effect<A, E, R>,
-				middlewareTagWithProps.provides as Context.Tag<MWProvides, unknown>,
-				impl(options),
-			) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+		let result = effect as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+
+		for (const middleware of middlewares) {
+			const middlewareTag = middleware.tag as RpcMiddleware.TagClassAnyWithProps;
+			const impl = middleware.impl as RpcMiddleware.RpcMiddleware<unknown, unknown>;
+
+			if (middlewareTag.provides !== undefined) {
+				result = Effect.provideServiceEffect(
+					result,
+					middlewareTag.provides,
+					impl(options),
+				) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+			} else {
+				result = Effect.zipRight(
+					impl(options),
+					result,
+				) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+			}
 		}
-		return Effect.zipRight(
-			impl(options),
-			effect,
-		) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+
+		return result;
 	};
 
 	const buildQueryHandler = <R extends Rpc.Any>(
@@ -284,6 +303,10 @@ export const createRpcFactory = <
 
 	type MergedPayload<P extends Schema.Struct.Fields> = BasePayload & P;
 
+	type AllowedQueryRequirements = ConfectQueryCtx<ConfectDataModel> | MWProvides;
+	type AllowedMutationRequirements = ConfectMutationCtx<ConfectDataModel> | MWProvides;
+	type AllowedActionRequirements = ConfectActionCtx<ConfectDataModel> | MWProvides;
+
 	return {
 		query: <
 			PayloadFields extends Schema.Struct.Fields = {},
@@ -297,7 +320,7 @@ export const createRpcFactory = <
 			},
 			handler: (
 				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
+			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, AllowedQueryRequirements>,
 		): UnbuiltRpcEndpoint<
 			MergedPayload<PayloadFields>,
 			Success,
@@ -316,7 +339,7 @@ export const createRpcFactory = <
 					error: options.error,
 				});
 
-				const builtHandler = buildQueryHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, unknown>);
+				const builtHandler = buildQueryHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, AllowedQueryRequirements>);
 				const fn = queryGeneric(builtHandler);
 
 				return { _tag: tag, rpc, fn };
@@ -335,7 +358,7 @@ export const createRpcFactory = <
 			},
 			handler: (
 				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
+			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, AllowedMutationRequirements>,
 		): UnbuiltRpcEndpoint<
 			MergedPayload<PayloadFields>,
 			Success,
@@ -354,7 +377,7 @@ export const createRpcFactory = <
 					error: options.error,
 				});
 
-				const builtHandler = buildMutationHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, unknown>);
+				const builtHandler = buildMutationHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, AllowedMutationRequirements>);
 				const fn = mutationGeneric(builtHandler);
 
 				return { _tag: tag, rpc, fn };
@@ -373,7 +396,7 @@ export const createRpcFactory = <
 			},
 			handler: (
 				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
+			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, AllowedActionRequirements>,
 		): UnbuiltRpcEndpoint<
 			MergedPayload<PayloadFields>,
 			Success,
@@ -392,7 +415,7 @@ export const createRpcFactory = <
 					error: options.error,
 				});
 
-				const builtHandler = buildActionHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, unknown>);
+				const builtHandler = buildActionHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, AllowedActionRequirements>);
 				const fn = actionGeneric(builtHandler);
 
 				return { _tag: tag, rpc, fn };
@@ -411,7 +434,7 @@ export const createRpcFactory = <
 			},
 			handler: (
 				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
+			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, AllowedQueryRequirements>,
 		): UnbuiltRpcEndpoint<
 			MergedPayload<PayloadFields>,
 			Success,
@@ -430,7 +453,7 @@ export const createRpcFactory = <
 					error: options.error,
 				});
 
-				const builtHandler = buildQueryHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, unknown>);
+				const builtHandler = buildQueryHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, AllowedQueryRequirements>);
 				const fn = internalQueryGeneric(builtHandler);
 
 				return { _tag: tag, rpc, fn };
@@ -449,7 +472,7 @@ export const createRpcFactory = <
 			},
 			handler: (
 				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
+			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, AllowedMutationRequirements>,
 		): UnbuiltRpcEndpoint<
 			MergedPayload<PayloadFields>,
 			Success,
@@ -468,7 +491,7 @@ export const createRpcFactory = <
 					error: options.error,
 				});
 
-				const builtHandler = buildMutationHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, unknown>);
+				const builtHandler = buildMutationHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, AllowedMutationRequirements>);
 				const fn = internalMutationGeneric(builtHandler);
 
 				return { _tag: tag, rpc, fn };
@@ -487,7 +510,7 @@ export const createRpcFactory = <
 			},
 			handler: (
 				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
+			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, AllowedActionRequirements>,
 		): UnbuiltRpcEndpoint<
 			MergedPayload<PayloadFields>,
 			Success,
@@ -506,7 +529,7 @@ export const createRpcFactory = <
 					error: options.error,
 				});
 
-				const builtHandler = buildActionHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, unknown>);
+				const builtHandler = buildActionHandler(rpc, handler as (payload: Rpc.Payload<typeof rpc>) => Effect.Effect<Rpc.Success<typeof rpc>, Rpc.Error<typeof rpc>, AllowedActionRequirements>);
 				const fn = internalActionGeneric(builtHandler);
 
 				return { _tag: tag, rpc, fn };
