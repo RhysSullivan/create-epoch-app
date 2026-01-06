@@ -17,14 +17,8 @@ import type * as public_users from "../public/users.js";
 import type * as rpc_admin from "../rpc/admin.js";
 import type * as rpc_guestbook from "../rpc/guestbook.js";
 import type * as rpc_middleware from "../rpc/middleware.js";
-import type * as shared_auth from "../shared/auth.js";
-import type * as shared_authIdentity from "../shared/authIdentity.js";
 import type * as shared_betterAuth from "../shared/betterAuth.js";
-import type * as shared_dataAccess from "../shared/dataAccess.js";
-import type * as shared_index from "../shared/index.js";
 import type * as shared_rateLimiter from "../shared/rateLimiter.js";
-import type * as shared_shared from "../shared/shared.js";
-import type * as shared_validators from "../shared/validators.js";
 
 import type {
   ApiFromModules,
@@ -42,14 +36,8 @@ declare const fullApi: ApiFromModules<{
   "rpc/admin": typeof rpc_admin;
   "rpc/guestbook": typeof rpc_guestbook;
   "rpc/middleware": typeof rpc_middleware;
-  "shared/auth": typeof shared_auth;
-  "shared/authIdentity": typeof shared_authIdentity;
   "shared/betterAuth": typeof shared_betterAuth;
-  "shared/dataAccess": typeof shared_dataAccess;
-  "shared/index": typeof shared_index;
   "shared/rateLimiter": typeof shared_rateLimiter;
-  "shared/shared": typeof shared_shared;
-  "shared/validators": typeof shared_validators;
 }>;
 
 /**
