@@ -13,8 +13,13 @@ import {
 import { Cause } from "effect";
 import { useState } from "react";
 
-const CONVEX_URL = process.env.CONVEX_URL ?? "";
-const PRIVATE_ACCESS_KEY = process.env.PRIVATE_ACCESS_KEY ?? "";
+const CONVEX_URL = process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
+if (!CONVEX_URL) {
+	throw new Error(
+		"CONVEX_URL or NEXT_PUBLIC_CONVEX_URL environment variable is required",
+	);
+}
+const PRIVATE_ACCESS_KEY = process.env.PRIVATE_ACCESS_KEY ?? "test-key";
 
 type SharedPayload = { privateAccessKey: string };
 
@@ -25,8 +30,10 @@ const guestbookClient = RpcModuleClient.makeClientWithShared<
 	privateAccessKey: PRIVATE_ACCESS_KEY,
 }));
 
+const listAtom = guestbookClient.list.subscription({});
+
 export function GuestbookCommand() {
-	const result = useAtomValue(guestbookClient.list.query({}));
+	const result = useAtomValue(listAtom);
 	const addEntry = useAtomSet(guestbookClient.add.mutate);
 	const [isAdding, setIsAdding] = useState(false);
 

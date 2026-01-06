@@ -102,21 +102,27 @@ This starts:
 
 ## Key Patterns
 
-### Effect + Convex (Confect)
+### Effect + Convex (Confect RPC)
 
-The `confect` package provides type-safe Convex functions with Effect:
+The `confect` package provides type-safe Convex RPC functions with Effect:
 
 ```typescript
-import { ConfectMutation } from "@packages/confect/server";
-import * as Schema from "effect/Schema";
+import { createRpcFactory, makeRpcModule } from "@packages/confect/rpc";
+import { Effect, Schema } from "effect";
+import { ConfectMutationCtx, confectSchema } from "../confect";
 
-export const createPost = ConfectMutation({
-  args: Schema.Struct({ title: Schema.String }),
-  handler: (ctx, args) =>
-    Effect.gen(function* () {
-      const id = yield* ctx.db.insert("posts", { title: args.title });
-      return id;
-    }),
+const factory = createRpcFactory({ schema: confectSchema });
+
+export const postsModule = makeRpcModule({
+  create: factory.mutation(
+    { payload: { title: Schema.String }, success: Schema.String },
+    (args) =>
+      Effect.gen(function* () {
+        const ctx = yield* ConfectMutationCtx;
+        const id = yield* ctx.db.insert("posts", { title: args.title });
+        return id;
+      }),
+  ),
 });
 ```
 
