@@ -410,15 +410,26 @@ export type InferRpc<E> = E extends RpcEndpoint<infer _Tag, infer R, infer _Conv
 
 export type InferFn<E> = E extends RpcEndpoint<infer _Tag, infer _R, infer ConvexFn> ? ConvexFn : never;
 
+export interface RpcModule<
+	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
+> {
+	readonly _def: {
+		readonly endpoints: Endpoints;
+	};
+	readonly rpcs: { [K in keyof Endpoints]: InferRpc<Endpoints[K]> };
+	readonly handlers: { [K in keyof Endpoints]: InferFn<Endpoints[K]> };
+	readonly group: RpcGroup.RpcGroup<InferRpc<Endpoints[keyof Endpoints]>>;
+}
+
+export type AnyRpcModule = RpcModule<Record<string, RpcEndpoint<string, Rpc.Any, unknown>>>;
+
+export type InferModuleEndpoints<M extends AnyRpcModule> = M["_def"]["endpoints"];
+
 export const makeRpcModule = <
 	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
 >(
 	endpoints: Endpoints,
-): {
-	readonly rpcs: { [K in keyof Endpoints]: InferRpc<Endpoints[K]> };
-	readonly handlers: { [K in keyof Endpoints]: InferFn<Endpoints[K]> };
-	readonly group: RpcGroup.RpcGroup<InferRpc<Endpoints[keyof Endpoints]>>;
-} => {
+): RpcModule<Endpoints> & Endpoints => {
 	const rpcs = {} as Record<string, Rpc.Any>;
 	const handlers = {} as Record<string, unknown>;
 	const rpcList: Rpc.Any[] = [];
@@ -430,9 +441,12 @@ export const makeRpcModule = <
 		rpcList.push(endpoint.rpc);
 	}
 
-	return {
+	const module = {
+		_def: { endpoints },
 		rpcs: rpcs as { [K in keyof Endpoints]: InferRpc<Endpoints[K]> },
 		handlers: handlers as { [K in keyof Endpoints]: InferFn<Endpoints[K]> },
 		group: RpcGroup.make(...rpcList) as unknown as RpcGroup.RpcGroup<InferRpc<Endpoints[keyof Endpoints]>>,
 	};
+
+	return Object.assign(module, endpoints) as RpcModule<Endpoints> & Endpoints;
 };

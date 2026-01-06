@@ -19,6 +19,7 @@
 		"react": "catalog:"
 	},
 	"devDependencies": {
+		"@packages/confect-ts-plugin": "workspace:*",
 		"@packages/typescript-config": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/react": "catalog:"

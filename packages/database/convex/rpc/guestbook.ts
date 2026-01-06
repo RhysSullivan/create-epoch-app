@@ -46,66 +46,62 @@ const GuestbookEntry = Schema.Struct({
 	message: Schema.String,
 });
 
-export const listEndpoint = factory.query(
-	"list",
-	{
-		payload: { privateAccessKey: Schema.String },
-		success: Schema.Array(GuestbookEntry),
-	},
-	() =>
-		Effect.gen(function* () {
-			yield* AuthenticatedUser;
-			const ctx = yield* ConfectQueryCtx;
-			const entries = yield* ctx.db.query("guestbook").order("desc").take(50);
-			return entries.map((e) => ({
-				_id: e._id,
-				_creationTime: e._creationTime,
-				name: e.name,
-				message: e.message,
-			}));
-		}),
-);
-
-export const addEndpoint = factory.mutation(
-	"add",
-	{
-		payload: {
-			privateAccessKey: Schema.String,
-			name: Schema.String,
-			message: Schema.String,
+export const guestbookModule = makeRpcModule({
+	list: factory.query(
+		"list",
+		{
+			payload: { privateAccessKey: Schema.String },
+			success: Schema.Array(GuestbookEntry),
 		},
-		success: Schema.String,
-		error: ValidationError,
-	},
-	(args) =>
-		Effect.gen(function* () {
-			yield* AuthenticatedUser;
-			const ctx = yield* ConfectMutationCtx;
-			const name = args.name.trim().slice(0, 50);
-			const message = args.message.trim().slice(0, 500);
+		() =>
+			Effect.gen(function* () {
+				yield* AuthenticatedUser;
+				const ctx = yield* ConfectQueryCtx;
+				const entries = yield* ctx.db.query("guestbook").order("desc").take(50);
+				return entries.map((e) => ({
+					_id: e._id,
+					_creationTime: e._creationTime,
+					name: e.name,
+					message: e.message,
+				}));
+			}),
+	),
 
-			if (name.length === 0 || message.length === 0) {
-				yield* new ValidationError({
-					message: "Name and message are required",
-				});
-			}
+	add: factory.mutation(
+		"add",
+		{
+			payload: {
+				privateAccessKey: Schema.String,
+				name: Schema.String,
+				message: Schema.String,
+			},
+			success: Schema.String,
+			error: ValidationError,
+		},
+		(args) =>
+			Effect.gen(function* () {
+				yield* AuthenticatedUser;
+				const ctx = yield* ConfectMutationCtx;
+				const name = args.name.trim().slice(0, 50);
+				const message = args.message.trim().slice(0, 500);
 
-			const id = yield* ctx.db
-				.insert("guestbook", { name, message })
-				.pipe(Effect.orDie);
-			return id;
-		}),
-);
+				if (name.length === 0 || message.length === 0) {
+					yield* new ValidationError({
+						message: "Name and message are required",
+					});
+				}
 
-export const endpoints = {
-	list: listEndpoint,
-	add: addEndpoint,
-};
-
-export const guestbookModule = makeRpcModule(endpoints);
+				const id = yield* ctx.db
+					.insert("guestbook", { name, message })
+					.pipe(Effect.orDie);
+				return id;
+			}),
+	),
+});
 
 export const { list, add } = guestbookModule.handlers;
 
 export const GuestbookRpcs = guestbookModule.group;
 
-export type GuestbookEndpoints = typeof endpoints;
+export type GuestbookEndpoints = typeof guestbookModule._def.endpoints;
+export type GuestbookModule = typeof guestbookModule;

@@ -56,6 +56,7 @@
         "react-dom": "catalog:",
       },
       "devDependencies": {
+        "@packages/confect-ts-plugin": "workspace:*",
         "@packages/typescript-config": "workspace:*",
         "@tailwindcss/postcss": "catalog:",
         "@types/node": "catalog:",
@@ -91,6 +92,14 @@
       "devDependencies": {
         "@types/node": "catalog:",
         "typescript": "catalog:",
+      },
+    },
+    "packages/confect-ts-plugin": {
+      "name": "@packages/confect-ts-plugin",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@types/node": "^22.0.0",
+        "typescript": "^5.8.3",
       },
     },
     "packages/convex-test": {
@@ -188,6 +197,7 @@
         "react": "catalog:",
       },
       "devDependencies": {
+        "@packages/confect-ts-plugin": "workspace:*",
         "@packages/typescript-config": "workspace:*",
         "@types/node": "catalog:",
         "@types/react": "catalog:",
@@ -728,6 +738,8 @@
     "@packages/api": ["@packages/api@workspace:packages/api"],
 
     "@packages/confect": ["@packages/confect@workspace:packages/confect"],
+
+    "@packages/confect-ts-plugin": ["@packages/confect-ts-plugin@workspace:packages/confect-ts-plugin"],
 
     "@packages/convex-test": ["@packages/convex-test@workspace:packages/convex-test"],
 
@@ -2230,6 +2242,8 @@
     "@opentelemetry/sdk-trace-web/@opentelemetry/core": ["@opentelemetry/core@2.2.0", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-FuabnnUm8LflnieVxs6eP7Z383hgQU4W1e3KJS6aOG3RxWxcHyBxH8fDMHNgu/gFx/M2jvTOW/4/PHhLz6bjWw=="],
 
     "@opentelemetry/sql-common/@opentelemetry/core": ["@opentelemetry/core@2.2.0", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-FuabnnUm8LflnieVxs6eP7Z383hgQU4W1e3KJS6aOG3RxWxcHyBxH8fDMHNgu/gFx/M2jvTOW/4/PHhLz6bjWw=="],
+
+    "@packages/confect-ts-plugin/@types/node": ["@types/node@22.19.3", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-1N9SBnWYOJTrNZCdh/yJE+t910Y128BoyY+zBLWhL3r0TYzlTmFdXrPwHL9DyFZmlEXNQQolTZh3KHV31QDhyA=="],
 
     "@radix-ui/react-alert-dialog/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
 

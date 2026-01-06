@@ -35,6 +35,7 @@
 		"react-dom": "catalog:"
 	},
 	"devDependencies": {
+		"@packages/confect-ts-plugin": "workspace:*",
 		"@packages/typescript-config": "workspace:*",
 		"@tailwindcss/postcss": "catalog:",
 		"@types/node": "catalog:",

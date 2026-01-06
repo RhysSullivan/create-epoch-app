@@ -8,7 +8,7 @@ import type {
 } from "convex/server";
 import { Cause, Effect, Exit, Stream } from "effect";
 import { ConvexClient, ConvexClientLayer } from "../client/convex-client";
-import type { RpcEndpoint } from "./RpcBuilder";
+import type { RpcEndpoint, AnyRpcModule, InferModuleEndpoints } from "./RpcBuilder";
 
 interface EncodedExit {
 	readonly _tag: "Success" | "Failure";
@@ -102,13 +102,15 @@ type DecorateEndpoint<E, Shared extends Record<string, unknown> = {}> =
 					}
 				: never;
 
+type EndpointsRecord = Record<string, RpcEndpoint<string, Rpc.Any, unknown>>;
+
 export type RpcModuleClient<
-	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
+	TEndpoints extends EndpointsRecord,
 	Shared extends Record<string, unknown> = {},
 > = {
 	readonly runtime: Atom.AtomRuntime<ConvexClient>;
 } & {
-	readonly [K in keyof Endpoints]: DecorateEndpoint<Endpoints[K], Shared>;
+	readonly [K in keyof TEndpoints]: DecorateEndpoint<TEndpoints[K], Shared>;
 };
 
 const createQueryAtom = (
@@ -204,13 +206,13 @@ const createActionFn = (
 const noop = () => {};
 
 export const makeClient = <
-	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
+	TEndpoints extends EndpointsRecord,
 	Shared extends Record<string, unknown> = {},
 >(
 	convexApi: ConvexApiModule,
 	config: RpcModuleClientConfig,
 	getShared: () => Shared = () => ({}) as Shared,
-): RpcModuleClient<Endpoints, Shared> => {
+): RpcModuleClient<TEndpoints, Shared> => {
 	const runtime = Atom.runtime(ConvexClientLayer(config.url));
 
 	const queryFamilies = new Map<
@@ -305,16 +307,16 @@ export const makeClient = <
 		},
 	});
 
-	return proxy as unknown as RpcModuleClient<Endpoints, Shared>;
+	return proxy as unknown as RpcModuleClient<TEndpoints, Shared>;
 };
 
 export const makeClientWithShared = <
-	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
+	TEndpoints extends EndpointsRecord,
 	Shared extends Record<string, unknown>,
 >(
 	convexApi: ConvexApiModule,
 	config: RpcModuleClientConfig,
 	getShared: () => Shared,
-): RpcModuleClient<Endpoints, Shared> => {
-	return makeClient<Endpoints, Shared>(convexApi, config, getShared);
+): RpcModuleClient<TEndpoints, Shared> => {
+	return makeClient<TEndpoints, Shared>(convexApi, config, getShared);
 };

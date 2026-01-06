@@ -4,6 +4,9 @@
 		"plugins": [
 			{
 				"name": "next"
+			},
+			{
+				"name": "@packages/confect-ts-plugin"
 			}
 		],
 		"jsx": "preserve",
