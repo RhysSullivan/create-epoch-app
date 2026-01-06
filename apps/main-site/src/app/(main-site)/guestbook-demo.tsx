@@ -79,37 +79,37 @@ export function GuestbookDemo() {
 			<div className="rounded-lg border bg-card p-6">
 				<h3 className="mb-4 font-medium">Messages</h3>
 
-				{Result.isInitial(result) && (
-					<div className="flex items-center gap-2 text-muted-foreground">
-						<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-						Loading...
-					</div>
-				)}
-
-				{Result.isFailure(result) && (
-					<div className="rounded bg-destructive/10 p-3 text-sm text-destructive">
-						Error: {Cause.pretty(result.cause)}
-					</div>
-				)}
-
-				{Result.isSuccess(result) && result.value.length === 0 && (
-					<p className="text-muted-foreground">
-						No messages yet. Be the first to sign!
-					</p>
-				)}
-
-				{Result.isSuccess(result) && result.value.length > 0 && (
-					<ul className="space-y-3">
-						{result.value.map((entry) => (
-							<li key={entry._id} className="rounded-md bg-muted/50 p-3">
-								<p className="font-medium">{entry.name}</p>
-								<p className="mt-1 text-sm text-muted-foreground">
-									{entry.message}
-								</p>
-							</li>
-						))}
-					</ul>
-				)}
+				{Result.builder(result)
+					.onInitial(() => (
+						<div className="flex items-center gap-2 text-muted-foreground">
+							<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+							Loading...
+						</div>
+					))
+					.onFailure((cause) => (
+						<div className="rounded bg-destructive/10 p-3 text-sm text-destructive">
+							Error: {Cause.pretty(cause)}
+						</div>
+					))
+					.onSuccess((entries) =>
+						entries.length === 0 ? (
+							<p className="text-muted-foreground">
+								No messages yet. Be the first to sign!
+							</p>
+						) : (
+							<ul className="space-y-3">
+								{entries.map((entry) => (
+									<li key={entry._id} className="rounded-md bg-muted/50 p-3">
+										<p className="font-medium">{entry.name}</p>
+										<p className="mt-1 text-sm text-muted-foreground">
+											{entry.message}
+										</p>
+									</li>
+								))}
+							</ul>
+						),
+					)
+					.render()}
 			</div>
 		</div>
 	);
