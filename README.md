@@ -3,9 +3,13 @@
 An opinionated starter template for building full-stack applications with **Effect**, **Convex**, and **Next.js**.
 
 e - effect
+
 p - posthog
+
 o - otel
+
 c - convex
+
 h - help me find something with h to cram in here
 
 ## What's Included
