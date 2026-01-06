@@ -21,6 +21,9 @@
 		"clean": "rm -rf node_modules .turbo",
 		"test": "vitest run --no-watch --pool=forks",
 		"test:watch": "vitest",
+		"benchmark": "vitest run --no-watch --pool=forks benchmark/benchmark.test.ts",
+		"benchmark:schema": "vitest run --no-watch --pool=forks -t 'Effect Without Schema'",
+		"benchmark:micro": "vitest run --no-watch --pool=forks -t 'MicroRpcBuilder'",
 		"convex:knip": "bun scripts/find-unused-convex-functions.ts",
 		"env:sync:prod": "bun run scripts/sync-env-prod.ts"
 	},

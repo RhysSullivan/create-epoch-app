@@ -7,6 +7,8 @@
 		"./server": "./src/server/index.ts",
 		"./client": "./src/client/index.ts",
 		"./rpc": "./src/rpc/index.ts",
+		"./rpc/micro": "./src/rpc/MicroRpcBuilder.ts",
+		"./rpc/micro-client": "./src/rpc/MicroRpcClient.ts",
 		"./convex": "./src/convex/index.ts"
 	},
 	"dependencies": {
