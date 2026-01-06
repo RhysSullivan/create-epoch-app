@@ -16,6 +16,7 @@ import type * as public_posts from "../public/posts.js";
 import type * as public_users from "../public/users.js";
 import type * as rpc_admin from "../rpc/admin.js";
 import type * as rpc_guestbook from "../rpc/guestbook.js";
+import type * as rpc_middleware from "../rpc/middleware.js";
 import type * as shared_auth from "../shared/auth.js";
 import type * as shared_authIdentity from "../shared/authIdentity.js";
 import type * as shared_betterAuth from "../shared/betterAuth.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   "public/users": typeof public_users;
   "rpc/admin": typeof rpc_admin;
   "rpc/guestbook": typeof rpc_guestbook;
+  "rpc/middleware": typeof rpc_middleware;
   "shared/auth": typeof shared_auth;
   "shared/authIdentity": typeof shared_authIdentity;
   "shared/betterAuth": typeof shared_betterAuth;

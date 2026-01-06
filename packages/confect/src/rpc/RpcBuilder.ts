@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "@effect/rpc";
+import { Rpc, RpcGroup, RpcMiddleware } from "@effect/rpc";
 import type {
 	DefaultFunctionArgs,
 	RegisteredMutation,
@@ -16,7 +16,7 @@ import {
 	internalMutationGeneric,
 	internalActionGeneric,
 } from "convex/server";
-import { Effect, pipe, Schema } from "effect";
+import { Context, Effect, pipe, Schema } from "effect";
 
 import {
 	ConfectActionCtx,
@@ -87,28 +87,80 @@ export interface UnbuiltRpcEndpoint<
 	readonly build: (tag: string) => RpcEndpoint<string, Rpc.Any, ConvexFnType>;
 }
 
-export type MiddlewareFn = (
-	effect: Effect.Effect<unknown, unknown, unknown>,
-	payload: unknown,
-) => Effect.Effect<unknown, unknown, unknown>;
 
-export interface RpcFactoryConfig<ConfectSchema extends GenericConfectSchema> {
+
+type MiddlewareOptionsFromTag<T> = T extends RpcMiddleware.TagClass<infer _Self, infer _Name, infer Options>
+	? Options
+	: never;
+
+type MiddlewareProvides<T extends RpcMiddleware.TagClassAny> = T extends { readonly provides: Context.Tag<infer Id, infer _S> }
+	? Id
+	: never;
+
+type MiddlewareFailure<T extends RpcMiddleware.TagClassAny> = RpcMiddleware.TagClass.Failure<MiddlewareOptionsFromTag<T>>;
+
+export interface RpcFactoryConfig<
+	ConfectSchema extends GenericConfectSchema,
+	BasePayload extends Schema.Struct.Fields = {},
+	Middleware extends RpcMiddleware.TagClassAny = never,
+> {
 	readonly schema: ConfectSchemaDefinition<ConfectSchema>;
-	readonly middleware?: MiddlewareFn;
+	readonly basePayload?: BasePayload;
+	readonly middleware?: Middleware;
+	readonly middlewareImpl?: Context.Tag.Service<Middleware>;
 }
 
-export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
-	config: RpcFactoryConfig<ConfectSchema>,
+export const createRpcFactory = <
+	ConfectSchema extends GenericConfectSchema,
+	BasePayload extends Schema.Struct.Fields = {},
+	Middleware extends RpcMiddleware.TagClassAny = never,
+>(
+	config: RpcFactoryConfig<ConfectSchema, BasePayload, Middleware>,
 ) => {
 	type ConfectDataModel = ConfectDataModelFromConfectSchema<ConfectSchema>;
 	const databaseSchemas = databaseSchemasFromConfectSchema(
 		config.schema.confectSchema,
 	) as DatabaseSchemasFromConfectDataModel<ConfectDataModel>;
-	const applyMiddleware = config.middleware ?? ((effect, _payload) => effect);
+	const basePayload = config.basePayload ?? ({} as BasePayload);
+	const middlewareTag = config.middleware;
+	const middlewareImpl = config.middlewareImpl;
 
 	type RawQueryCtx = GenericQueryCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
 	type RawMutationCtx = GenericMutationCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
 	type RawActionCtx = GenericActionCtx<DataModelFromConfectDataModel<ConfectDataModel>>;
+
+	type MWProvides = MiddlewareProvides<Middleware>;
+	type MWFailure = MiddlewareFailure<Middleware>;
+
+	const applyMiddleware = <A, E, R>(
+		effect: Effect.Effect<A, E, R>,
+		payload: unknown,
+	): Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>> => {
+		if (!middlewareTag || !middlewareImpl) {
+			return effect as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+		}
+
+		const middlewareTagWithProps = middlewareTag as RpcMiddleware.TagClassAnyWithProps;
+		const impl = middlewareImpl as RpcMiddleware.RpcMiddleware<unknown, unknown>;
+		const options = {
+			clientId: 0,
+			rpc: {} as Rpc.AnyWithProps,
+			payload,
+			headers: {} as import("@effect/platform/Headers").Headers,
+		};
+
+		if (middlewareTagWithProps.provides !== undefined) {
+			return Effect.provideServiceEffect(
+				effect as Effect.Effect<A, E, R>,
+				middlewareTagWithProps.provides as Context.Tag<MWProvides, unknown>,
+				impl(options),
+			) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+		}
+		return Effect.zipRight(
+			impl(options),
+			effect,
+		) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
+	};
 
 	const buildQueryHandler = <R extends Rpc.Any>(
 		rpc: R,
@@ -230,6 +282,8 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 		};
 	};
 
+	type MergedPayload<P extends Schema.Struct.Fields> = BasePayload & P;
+
 	return {
 		query: <
 			PayloadFields extends Schema.Struct.Fields = {},
@@ -242,21 +296,22 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 				readonly error?: Error;
 			},
 			handler: (
-				payload: Schema.Struct.Type<PayloadFields>,
+				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
 			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
 		): UnbuiltRpcEndpoint<
-			PayloadFields,
+			MergedPayload<PayloadFields>,
 			Success,
 			Error,
 			RegisteredQuery<"public", DefaultFunctionArgs, Promise<unknown>>
 		> => ({
 			__unbuilt: true as const,
 			kind: "query" as const,
-			options,
+			options: { ...options, payload: { ...basePayload, ...options.payload } as MergedPayload<PayloadFields> },
 			handler,
 			build: (tag: string) => {
+				const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
 				const rpc = Rpc.make(tag, {
-					payload: options.payload,
+					payload: mergedPayload,
 					success: options.success,
 					error: options.error,
 				});
@@ -279,21 +334,22 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 				readonly error?: Error;
 			},
 			handler: (
-				payload: Schema.Struct.Type<PayloadFields>,
+				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
 			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
 		): UnbuiltRpcEndpoint<
-			PayloadFields,
+			MergedPayload<PayloadFields>,
 			Success,
 			Error,
 			RegisteredMutation<"public", DefaultFunctionArgs, Promise<unknown>>
 		> => ({
 			__unbuilt: true as const,
 			kind: "mutation" as const,
-			options,
+			options: { ...options, payload: { ...basePayload, ...options.payload } as MergedPayload<PayloadFields> },
 			handler,
 			build: (tag: string) => {
+				const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
 				const rpc = Rpc.make(tag, {
-					payload: options.payload,
+					payload: mergedPayload,
 					success: options.success,
 					error: options.error,
 				});
@@ -316,21 +372,22 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 				readonly error?: Error;
 			},
 			handler: (
-				payload: Schema.Struct.Type<PayloadFields>,
+				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
 			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
 		): UnbuiltRpcEndpoint<
-			PayloadFields,
+			MergedPayload<PayloadFields>,
 			Success,
 			Error,
 			RegisteredAction<"public", DefaultFunctionArgs, Promise<unknown>>
 		> => ({
 			__unbuilt: true as const,
 			kind: "action" as const,
-			options,
+			options: { ...options, payload: { ...basePayload, ...options.payload } as MergedPayload<PayloadFields> },
 			handler,
 			build: (tag: string) => {
+				const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
 				const rpc = Rpc.make(tag, {
-					payload: options.payload,
+					payload: mergedPayload,
 					success: options.success,
 					error: options.error,
 				});
@@ -353,21 +410,22 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 				readonly error?: Error;
 			},
 			handler: (
-				payload: Schema.Struct.Type<PayloadFields>,
+				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
 			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
 		): UnbuiltRpcEndpoint<
-			PayloadFields,
+			MergedPayload<PayloadFields>,
 			Success,
 			Error,
 			RegisteredQuery<"internal", DefaultFunctionArgs, Promise<unknown>>
 		> => ({
 			__unbuilt: true as const,
 			kind: "internalQuery" as const,
-			options,
+			options: { ...options, payload: { ...basePayload, ...options.payload } as MergedPayload<PayloadFields> },
 			handler,
 			build: (tag: string) => {
+				const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
 				const rpc = Rpc.make(tag, {
-					payload: options.payload,
+					payload: mergedPayload,
 					success: options.success,
 					error: options.error,
 				});
@@ -390,21 +448,22 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 				readonly error?: Error;
 			},
 			handler: (
-				payload: Schema.Struct.Type<PayloadFields>,
+				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
 			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
 		): UnbuiltRpcEndpoint<
-			PayloadFields,
+			MergedPayload<PayloadFields>,
 			Success,
 			Error,
 			RegisteredMutation<"internal", DefaultFunctionArgs, Promise<unknown>>
 		> => ({
 			__unbuilt: true as const,
 			kind: "internalMutation" as const,
-			options,
+			options: { ...options, payload: { ...basePayload, ...options.payload } as MergedPayload<PayloadFields> },
 			handler,
 			build: (tag: string) => {
+				const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
 				const rpc = Rpc.make(tag, {
-					payload: options.payload,
+					payload: mergedPayload,
 					success: options.success,
 					error: options.error,
 				});
@@ -427,21 +486,22 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 				readonly error?: Error;
 			},
 			handler: (
-				payload: Schema.Struct.Type<PayloadFields>,
+				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
 			) => Effect.Effect<Schema.Schema.Type<Success>, Schema.Schema.Type<Error>, unknown>,
 		): UnbuiltRpcEndpoint<
-			PayloadFields,
+			MergedPayload<PayloadFields>,
 			Success,
 			Error,
 			RegisteredAction<"internal", DefaultFunctionArgs, Promise<unknown>>
 		> => ({
 			__unbuilt: true as const,
 			kind: "internalAction" as const,
-			options,
+			options: { ...options, payload: { ...basePayload, ...options.payload } as MergedPayload<PayloadFields> },
 			handler,
 			build: (tag: string) => {
+				const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
 				const rpc = Rpc.make(tag, {
-					payload: options.payload,
+					payload: mergedPayload,
 					success: options.success,
 					error: options.error,
 				});
@@ -458,6 +518,17 @@ export const createRpcFactory = <ConfectSchema extends GenericConfectSchema>(
 export type InferRpc<E> = E extends RpcEndpoint<infer _Tag, infer R, infer _ConvexFn> ? R : never;
 
 export type InferFn<E> = E extends RpcEndpoint<infer _Tag, infer _R, infer ConvexFn> ? ConvexFn : never;
+
+interface RpcModuleBase<
+	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
+> {
+	readonly _def: {
+		readonly endpoints: Endpoints;
+	};
+	readonly rpcs: { [K in keyof Endpoints]: InferRpc<Endpoints[K]> };
+	readonly handlers: { [K in keyof Endpoints]: InferFn<Endpoints[K]> };
+	readonly group: RpcGroup.RpcGroup<InferRpc<Endpoints[keyof Endpoints]>>;
+}
 
 export type RpcModule<
 	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
@@ -484,17 +555,6 @@ type BuiltEndpoints<T extends Record<string, AnyUnbuiltEndpoint>> = {
 
 const isUnbuilt = (value: unknown): value is AnyUnbuiltEndpoint =>
 	typeof value === "object" && value !== null && "__unbuilt" in value && value.__unbuilt === true;
-
-interface RpcModuleBase<
-	Endpoints extends Record<string, RpcEndpoint<string, Rpc.Any, unknown>>,
-> {
-	readonly _def: {
-		readonly endpoints: Endpoints;
-	};
-	readonly rpcs: { [K in keyof Endpoints]: InferRpc<Endpoints[K]> };
-	readonly handlers: { [K in keyof Endpoints]: InferFn<Endpoints[K]> };
-	readonly group: RpcGroup.RpcGroup<InferRpc<Endpoints[keyof Endpoints]>>;
-}
 
 export function makeRpcModule<
 	const T extends Record<string, AnyUnbuiltEndpoint>,

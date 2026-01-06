@@ -30,7 +30,7 @@ function findNodeAtPosition(
 const testPatterns = [
 	{
 		file: path.join(projectRoot, "packages/react/src/guestbook-rpc.tsx"),
-		pattern: "client.add",
+		pattern: "client.list",
 		offset: "client.".length,
 	},
 	{

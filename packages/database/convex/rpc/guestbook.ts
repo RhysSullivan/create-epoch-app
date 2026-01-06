@@ -1,15 +1,23 @@
 import {
-	AuthenticatedUser,
-	AuthenticationError,
-} from "@packages/api/middleware";
-import { createRpcFactory, makeRpcModule } from "@packages/confect/rpc";
+	createRpcFactory,
+	makeRpcModule,
+	RpcMiddleware,
+} from "@packages/confect/rpc";
 import { Effect, Schema } from "effect";
 
 import { ConfectMutationCtx, ConfectQueryCtx, confectSchema } from "../confect";
+import { AuthenticatedUser, AuthenticationError } from "./middleware";
 
 const VALID_ACCESS_KEY = process.env.PRIVATE_ACCESS_KEY ?? "test-key";
 
-const validateAuth = (payload: unknown) => {
+const AuthPayload = {
+	privateAccessKey: Schema.String,
+};
+
+const authMiddlewareImpl: RpcMiddleware.RpcMiddleware<
+	{ readonly id: string; readonly email: string },
+	AuthenticationError
+> = ({ payload }) => {
 	const token = (payload as { privateAccessKey?: string })?.privateAccessKey;
 	if (!token) {
 		return Effect.fail(
@@ -24,14 +32,19 @@ const validateAuth = (payload: unknown) => {
 	return Effect.succeed({ id: "system", email: "system@example.com" });
 };
 
+class AuthMiddleware extends RpcMiddleware.Tag<AuthMiddleware>()(
+	"AuthMiddleware",
+	{
+		provides: AuthenticatedUser,
+		failure: AuthenticationError,
+	},
+) {}
+
 const factory = createRpcFactory({
 	schema: confectSchema,
-	middleware: (effect, payload) =>
-		Effect.provideServiceEffect(
-			effect,
-			AuthenticatedUser,
-			validateAuth(payload),
-		),
+	basePayload: AuthPayload,
+	middleware: AuthMiddleware,
+	middlewareImpl: authMiddlewareImpl,
 });
 
 export class ValidationError extends Schema.TaggedError<ValidationError>()(
@@ -47,29 +60,22 @@ const GuestbookEntry = Schema.Struct({
 });
 
 export const guestbookModule = makeRpcModule({
-	list: factory.query(
-		{
-			payload: { privateAccessKey: Schema.String },
-			success: Schema.Array(GuestbookEntry),
-		},
-		() =>
-			Effect.gen(function* () {
-				yield* AuthenticatedUser;
-				const ctx = yield* ConfectQueryCtx;
-				const entries = yield* ctx.db.query("guestbook").order("desc").take(50);
-				return entries.map((e) => ({
-					_id: e._id,
-					_creationTime: e._creationTime,
-					name: e.name,
-					message: e.message,
-				}));
-			}),
+	list: factory.query({ success: Schema.Array(GuestbookEntry) }, () =>
+		Effect.gen(function* () {
+			const ctx = yield* ConfectQueryCtx;
+			const entries = yield* ctx.db.query("guestbook").order("desc").take(50);
+			return entries.map((e) => ({
+				_id: e._id,
+				_creationTime: e._creationTime,
+				name: e.name,
+				message: e.message,
+			}));
+		}),
 	),
 
 	add: factory.mutation(
 		{
 			payload: {
-				privateAccessKey: Schema.String,
 				name: Schema.String,
 				message: Schema.String,
 			},
@@ -78,7 +84,6 @@ export const guestbookModule = makeRpcModule({
 		},
 		(args) =>
 			Effect.gen(function* () {
-				yield* AuthenticatedUser;
 				const ctx = yield* ConfectMutationCtx;
 				const name = args.name.trim().slice(0, 50);
 				const message = args.message.trim().slice(0, 500);

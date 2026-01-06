@@ -1,7 +1,7 @@
 "use client";
 
 import { Result } from "@effect-atom/atom";
-import { useAtomValue, useAtomSet } from "@effect-atom/atom-react";
+import { useAtomValue, useAtom } from "@effect-atom/atom-react";
 import {
 	useGuestbookSubscription,
 	guestbookClient,
@@ -13,8 +13,7 @@ import { useState } from "react";
 
 export function GuestbookDemo() {
 	const result = useGuestbookSubscription();
-	const addResult = useAtomValue(guestbookClient.add.mutate);
-	const addEntry = useAtomSet(guestbookClient.add.mutate, {
+	const [addResult, addEntry] = useAtom(guestbookClient.add.mutate, {
 		mode: "promiseExit",
 	});
 	const [name, setName] = useState("");
