@@ -27,8 +27,6 @@
 	"dependencies": {
 		"@convex-dev/action-cache": "^0.3.0",
 		"@convex-dev/better-auth": "catalog:",
-		"@effect-atom/atom": "catalog:",
-		"@effect/rpc": "catalog:",
 		"@convex-dev/migrations": "^0.3.1",
 		"@convex-dev/rate-limiter": "^0.3.2",
 		"@packages/api": "workspace:*",
@@ -42,9 +40,6 @@
 	"devDependencies": {
 		"@edge-runtime/vm": "catalog:",
 		"@types/node": "catalog:",
-		"chokidar-cli": "^3.0.0",
-		"dotenv": "^17.2.3",
-		"glob": "^11.1.0",
 		"vitest": "catalog:"
 	}
 }

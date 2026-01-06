@@ -12,7 +12,6 @@
 	},
 	"dependencies": {
 		"@convex-dev/better-auth": "catalog:",
-		"@effect-atom/atom": "catalog:",
 		"@effect-atom/atom-react": "catalog:",
 		"@packages/confect": "workspace:*",
 		"effect": "catalog:",

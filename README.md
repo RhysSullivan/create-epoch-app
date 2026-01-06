@@ -2,6 +2,12 @@
 
 An opinionated starter template for building full-stack applications with **Effect**, **Convex**, and **Next.js**.
 
+e - effect
+p - posthog
+o - otel
+c - convex
+h - help me find something with h to cram in here
+
 ## What's Included
 
 ### Apps
@@ -73,6 +79,7 @@ bun dev
 ```
 
 This starts:
+
 - Next.js app at http://localhost:3000
 - Discord bot (if configured)
 - Convex dev server
@@ -85,7 +92,7 @@ This starts:
 │   └── main-site/       # Next.js frontend
 ├── packages/
 │   ├── confect/         # Effect + Convex integration
-│   ├── convex-test/     # Convex testing utilities  
+│   ├── convex-test/     # Convex testing utilities
 │   ├── database/        # Convex backend + auth
 │   ├── observability/   # Sentry + OpenTelemetry
 │   ├── reacord/         # React for Discord

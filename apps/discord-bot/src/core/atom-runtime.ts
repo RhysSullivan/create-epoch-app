@@ -2,7 +2,6 @@ import { type ConvexClient, ConvexClientLayer } from "@packages/confect/client";
 import { createAxiomLayer } from "@packages/observability/axiom";
 import { createOtelLayer } from "@packages/observability/effect-otel";
 import { createSentryEffectLayer } from "@packages/observability/sentry-effect";
-import { Atom } from "@packages/reacord";
 import { Effect, Layer, Logger, LogLevel } from "effect";
 
 const SentryLayer = process.env.SENTRY_DSN
@@ -63,7 +62,3 @@ export const PlatformLayer: Layer.Layer<ConvexClient> = Layer.mergeAll(
 );
 
 export const sharedMemoMap = Effect.runSync(Layer.makeMemoMap);
-
-export const atomRuntime = Atom.context({ memoMap: sharedMemoMap })(
-	PlatformLayer,
-);

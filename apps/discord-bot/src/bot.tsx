@@ -1,4 +1,4 @@
-import { Console, Effect, Layer } from "effect";
+import { Console, Effect } from "effect";
 import { Discord } from "./core/discord-service";
 import { Reacord } from "@packages/reacord";
 import { GuestbookCommand } from "./commands/guestbook";
@@ -6,8 +6,6 @@ import {
 	SlashCommandBuilder,
 	type ChatInputCommandInteraction,
 } from "discord.js";
-
-export const BotLayers = Layer.empty;
 
 const guestbookCommandDef = new SlashCommandBuilder()
 	.setName("guestbook")

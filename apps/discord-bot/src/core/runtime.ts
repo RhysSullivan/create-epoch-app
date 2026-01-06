@@ -4,8 +4,6 @@ import { DiscordClientLayer } from "./discord-client-service";
 import { DiscordLayerInternal } from "./discord-service";
 import { ReacordLayer } from "./reacord-layer";
 
-export { atomRuntime } from "./atom-runtime";
-
 export const createAppLayer = () => {
 	const DiscordLayers = Layer.mergeAll(
 		DiscordClientLayer,

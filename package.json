@@ -1,5 +1,6 @@
 {
 	"name": "convex-monorepo",
+	"license": "MIT",
 	"private": true,
 	"scripts": {
 		"i": "bun install",

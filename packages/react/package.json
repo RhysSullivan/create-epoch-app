@@ -6,20 +6,16 @@
 		"typecheck": "tsgo --noEmit"
 	},
 	"exports": {
-		"./guestbook": "./src/guestbook.tsx",
 		"./guestbook-rpc": "./src/guestbook-rpc.tsx"
 	},
 	"dependencies": {
-		"@effect-atom/atom": "catalog:",
 		"@effect-atom/atom-react": "catalog:",
-		"@packages/api": "workspace:*",
 		"@packages/confect": "workspace:*",
 		"@packages/database": "workspace:*",
 		"effect": "catalog:",
 		"react": "catalog:"
 	},
 	"devDependencies": {
-		"@packages/confect-ts-plugin": "workspace:*",
 		"@packages/typescript-config": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/react": "catalog:"

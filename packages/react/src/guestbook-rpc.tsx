@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue } from "@effect-atom/atom-react";
 import { RpcModuleClient } from "@packages/confect/rpc";
 import { api } from "@packages/database/convex/_generated/api";
-import type { GuestbookEndpoints } from "@packages/database/convex/rpc/guestbook";
+import type { GuestbookModule } from "@packages/database/convex/rpc/guestbook";
 
 const CONVEX_URL =
 	typeof process !== "undefined"
@@ -14,12 +14,11 @@ const PRIVATE_ACCESS_KEY =
 
 type SharedPayload = { privateAccessKey: string };
 
-const client = RpcModuleClient.makeClientWithShared<
-	GuestbookEndpoints,
-	SharedPayload
->(api.rpc.guestbook, { url: CONVEX_URL }, () => ({
-	privateAccessKey: PRIVATE_ACCESS_KEY,
-}));
+const client = RpcModuleClient.createClient<GuestbookModule, SharedPayload>(
+	api.rpc.guestbook,
+	{ url: CONVEX_URL },
+	() => ({ privateAccessKey: PRIVATE_ACCESS_KEY }),
+);
 
 export const useGuestbookList = () => useAtomValue(client.list.query({}));
 

@@ -8,7 +8,7 @@ import type {
 } from "convex/server";
 import { Cause, Effect, Exit, Stream } from "effect";
 import { ConvexClient, ConvexClientLayer } from "../client/convex-client";
-import type { RpcEndpoint, AnyRpcModule, InferModuleEndpoints } from "./RpcBuilder";
+import type { RpcEndpoint } from "./RpcBuilder";
 
 interface EncodedExit {
 	readonly _tag: "Success" | "Failure";
@@ -320,3 +320,35 @@ export const makeClientWithShared = <
 ): RpcModuleClient<TEndpoints, Shared> => {
 	return makeClient<TEndpoints, Shared>(convexApi, config, getShared);
 };
+
+type ModuleWithEndpoints = {
+	readonly _def: { readonly endpoints: EndpointsRecord };
+};
+
+type DecoratedEndpoints<M, Shared extends Record<string, unknown>> = {
+	readonly [K in keyof M as K extends "_def" | "rpcs" | "handlers" | "group" ? never : K]: M[K] extends RpcEndpoint<infer _T, infer _R, infer _C>
+		? DecorateEndpoint<M[K], Shared>
+		: never;
+};
+
+export type RpcModuleClientFromModule<
+	M extends ModuleWithEndpoints,
+	Shared extends Record<string, unknown> = {},
+> = {
+	readonly runtime: Atom.AtomRuntime<ConvexClient>;
+} & DecoratedEndpoints<M, Shared>;
+
+export function createClient<
+	M extends ModuleWithEndpoints,
+	Shared extends Record<string, unknown> = {},
+>(
+	convexApi: ConvexApiModule,
+	config: RpcModuleClientConfig,
+	getShared: () => Shared = () => ({}) as Shared,
+): RpcModuleClientFromModule<M, Shared> {
+	return makeClient<M["_def"]["endpoints"], Shared>(
+		convexApi,
+		config,
+		getShared,
+	) as unknown as RpcModuleClientFromModule<M, Shared>;
+}

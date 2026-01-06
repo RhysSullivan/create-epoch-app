@@ -48,7 +48,6 @@ const GuestbookEntry = Schema.Struct({
 
 export const guestbookModule = makeRpcModule({
 	list: factory.query(
-		"list",
 		{
 			payload: { privateAccessKey: Schema.String },
 			success: Schema.Array(GuestbookEntry),
@@ -68,7 +67,6 @@ export const guestbookModule = makeRpcModule({
 	),
 
 	add: factory.mutation(
-		"add",
 		{
 			payload: {
 				privateAccessKey: Schema.String,

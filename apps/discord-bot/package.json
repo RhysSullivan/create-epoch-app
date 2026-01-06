@@ -14,14 +14,13 @@
 	},
 	"dependencies": {
 		"@effect-atom/atom": "catalog:",
-		"@packages/api": "workspace:*",
 		"@packages/confect": "workspace:*",
 		"@packages/database": "workspace:*",
 		"@packages/observability": "workspace:*",
-		"@packages/react": "workspace:*",
 		"@packages/reacord": "workspace:*",
 		"discord.js": "^14.25.1",
-		"effect": "catalog:"
+		"effect": "catalog:",
+		"react": "catalog:"
 	},
 	"devDependencies": {
 		"@packages/typescript-config": "workspace:*",

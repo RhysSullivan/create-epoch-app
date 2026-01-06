@@ -1,8 +1,4 @@
-import {
-	compileSchema,
-	defineSchema,
-	defineTable,
-} from "@packages/confect/server";
+import { defineSchema, defineTable } from "@packages/confect/server";
 import { Schema } from "effect";
 
 const UserSchema = Schema.Struct({
@@ -31,13 +27,3 @@ export const confectSchema = defineSchema({
 });
 
 export default confectSchema.convexSchemaDefinition;
-
-export { UserSchema, PostSchema, GuestbookEntrySchema };
-
-export const userSchema = compileSchema(UserSchema);
-export const postSchema = compileSchema(PostSchema);
-export const guestbookEntrySchema = compileSchema(GuestbookEntrySchema);
-
-export type User = Schema.Schema.Type<typeof UserSchema>;
-export type Post = Schema.Schema.Type<typeof PostSchema>;
-export type GuestbookEntry = Schema.Schema.Type<typeof GuestbookEntrySchema>;
