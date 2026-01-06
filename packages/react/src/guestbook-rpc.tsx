@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue } from "@effect-atom/atom-react";
+import { useAtomValue } from "@effect-atom/atom-react";
 import { RpcModuleClient } from "@packages/confect/rpc";
 import { api } from "@packages/database/convex/_generated/api";
 import type { GuestbookModule } from "@packages/database/convex/rpc/guestbook";
@@ -24,7 +24,5 @@ export const useGuestbookList = () => useAtomValue(client.list.query({}));
 
 export const useGuestbookSubscription = () =>
 	useAtomValue(client.list.subscription({}));
-
-export const useGuestbookAdd = () => useAtom(client.add.mutate);
 
 export { client as guestbookClient };

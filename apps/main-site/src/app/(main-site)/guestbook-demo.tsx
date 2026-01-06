@@ -1,35 +1,45 @@
 "use client";
 
 import { Result } from "@effect-atom/atom";
-import { useAtomValue, useAtom } from "@effect-atom/atom-react";
+import { useAtomValue, useAtomSet } from "@effect-atom/atom-react";
 import {
 	useGuestbookSubscription,
-	useGuestbookAdd,
+	guestbookClient,
 } from "@packages/react/guestbook-rpc";
 import { Button } from "@packages/ui/components/button";
 import { Input } from "@packages/ui/components/input";
-import { Cause } from "effect";
+import { Cause, Exit } from "effect";
 import { useState } from "react";
 
 export function GuestbookDemo() {
 	const result = useGuestbookSubscription();
-	const [addResult, addEntry] = useGuestbookAdd();
+	const addResult = useAtomValue(guestbookClient.add.mutate);
+	const addEntry = useAtomSet(guestbookClient.add.mutate, {
+		mode: "promiseExit",
+	});
 	const [name, setName] = useState("");
 	const [message, setMessage] = useState("");
+	const [error, setError] = useState<string | null>(null);
 
 	const isSubmitting = Result.isWaiting(addResult);
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!name.trim() || !message.trim() || isSubmitting) return;
 
-		addEntry({
+		setError(null);
+
+		const exit = await addEntry({
 			name: name.trim(),
 			message: message.trim(),
 		});
 
-		setName("");
-		setMessage("");
+		if (Exit.isSuccess(exit)) {
+			setName("");
+			setMessage("");
+		} else {
+			setError(Cause.pretty(exit.cause));
+		}
 	};
 
 	return (
@@ -60,9 +70,9 @@ export function GuestbookDemo() {
 					</Button>
 				</form>
 
-				{Result.isFailure(addResult) && (
+				{error && (
 					<div className="mt-3 rounded bg-destructive/10 p-3 text-sm text-destructive">
-						Error: {Cause.pretty(addResult.cause)}
+						Error: {error}
 					</div>
 				)}
 			</div>
