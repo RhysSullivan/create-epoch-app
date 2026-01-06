@@ -1,4 +1,5 @@
 import { GuestbookDemo } from "./guestbook-demo";
+import { PaginationDemo } from "./pagination-demo";
 
 export default function HomePage() {
 	return (
@@ -10,7 +11,10 @@ export default function HomePage() {
 				</p>
 			</div>
 
-			<GuestbookDemo />
+			<div className="flex flex-col gap-8 md:flex-row md:items-start">
+				<GuestbookDemo />
+				<PaginationDemo />
+			</div>
 
 			<div className="max-w-lg text-center text-sm text-muted-foreground">
 				<p>
@@ -18,7 +22,9 @@ export default function HomePage() {
 					management with <strong>Convex</strong> real-time subscriptions.
 				</p>
 				<p className="mt-2">
-					Messages update in real-time across all connected clients.
+					Messages update in real-time across all connected clients. The
+					pagination demo shows cursor-based loading with{" "}
+					<strong>Atom.pull</strong>.
 				</p>
 			</div>
 		</main>

@@ -66,6 +66,12 @@ const GuestbookEntry = Schema.Struct({
 	message: Schema.String,
 });
 
+const PaginatedGuestbookResult = Schema.Struct({
+	page: Schema.Array(GuestbookEntry),
+	isDone: Schema.Boolean,
+	continueCursor: Schema.String,
+});
+
 export const guestbookModule = makeRpcModule({
 	list: factory.query({ success: Schema.Array(GuestbookEntry) }, () =>
 		Effect.gen(function* () {
@@ -95,7 +101,7 @@ export const guestbookModule = makeRpcModule({
 				const name = args.name.trim().slice(0, 50);
 				const message = args.message.trim().slice(0, 500);
 
-				const secret = yield* getSomeSecretData;
+				yield* getSomeSecretData;
 
 				if (name.length === 0 || message.length === 0) {
 					yield* new ValidationError({
@@ -109,9 +115,37 @@ export const guestbookModule = makeRpcModule({
 				return id;
 			}),
 	),
+
+	listPaginated: factory.query(
+		{
+			payload: {
+				cursor: Schema.NullOr(Schema.String),
+				numItems: Schema.Number,
+			},
+			success: PaginatedGuestbookResult,
+		},
+		(args) =>
+			Effect.gen(function* () {
+				const ctx = yield* ConfectQueryCtx;
+				const result = yield* ctx.db.query("guestbook").order("desc").paginate({
+					cursor: args.cursor,
+					numItems: args.numItems,
+				});
+				return {
+					page: result.page.map((e) => ({
+						_id: e._id,
+						_creationTime: e._creationTime,
+						name: e.name,
+						message: e.message,
+					})),
+					isDone: result.isDone,
+					continueCursor: result.continueCursor,
+				};
+			}),
+	),
 });
 
-export const { list, add } = guestbookModule.handlers;
+export const { list, add, listPaginated } = guestbookModule.handlers;
 
 export const GuestbookRpcs = guestbookModule.group;
 

@@ -6,7 +6,7 @@ import type {
 	RegisteredMutation,
 	RegisteredAction,
 } from "convex/server";
-import { Cause, Effect, Exit, Stream } from "effect";
+import { Cause, Chunk, Effect, Exit, Option, Stream } from "effect";
 import { ConvexClient, ConvexClientLayer } from "../client/convex-client";
 import type { RpcEndpoint } from "./RpcBuilder";
 
@@ -74,16 +74,63 @@ type EndpointKind<E> = E extends RpcEndpoint<infer _Tag, infer _R, infer ConvexF
 				: never
 	: never;
 
+type IsPaginatedResult<T> = T extends {
+	page: ReadonlyArray<infer _Item>;
+	isDone: boolean;
+	continueCursor: string;
+}
+	? true
+	: false;
+
+type ExtractPageItem<T> = T extends {
+	page: ReadonlyArray<infer Item>;
+	isDone: boolean;
+	continueCursor: string;
+}
+	? Item
+	: never;
+
+type IsPaginatedPayload<T> = T extends {
+	cursor: string | null;
+	numItems: number;
+}
+	? true
+	: false;
+
 type DecorateEndpoint<E, Shared extends Record<string, unknown> = {}> =
 	EndpointKind<E> extends "query"
-		? {
-				query: (
-					payload: Omit<EndpointPayload<E>, keyof Shared>,
-				) => Atom.Atom<EndpointResult<E>>;
-				subscription: (
-					payload: Omit<EndpointPayload<E>, keyof Shared>,
-				) => Atom.Atom<EndpointResult<E>>;
-			}
+		? IsPaginatedResult<EndpointSuccess<E>> extends true
+			? IsPaginatedPayload<EndpointPayload<E>> extends true
+				? {
+						query: (
+							payload: Omit<EndpointPayload<E>, keyof Shared>,
+						) => Atom.Atom<EndpointResult<E>>;
+						subscription: (
+							payload: Omit<EndpointPayload<E>, keyof Shared>,
+						) => Atom.Atom<EndpointResult<E>>;
+						paginated: (
+							numItems: number,
+						) => Atom.Writable<
+							Atom.PullResult<ExtractPageItem<EndpointSuccess<E>>, EndpointError<E>>,
+							void
+						>;
+					}
+				: {
+						query: (
+							payload: Omit<EndpointPayload<E>, keyof Shared>,
+						) => Atom.Atom<EndpointResult<E>>;
+						subscription: (
+							payload: Omit<EndpointPayload<E>, keyof Shared>,
+						) => Atom.Atom<EndpointResult<E>>;
+					}
+			: {
+					query: (
+						payload: Omit<EndpointPayload<E>, keyof Shared>,
+					) => Atom.Atom<EndpointResult<E>>;
+					subscription: (
+						payload: Omit<EndpointPayload<E>, keyof Shared>,
+					) => Atom.Atom<EndpointResult<E>>;
+				}
 		: EndpointKind<E> extends "mutation"
 			? {
 					mutate: Atom.AtomResultFn<
@@ -203,6 +250,46 @@ const createActionFn = (
 	);
 };
 
+interface PaginatedResult<T> {
+	page: ReadonlyArray<T>;
+	isDone: boolean;
+	continueCursor: string;
+}
+
+const createPaginatedAtom = (
+	runtime: Atom.AtomRuntime<ConvexClient>,
+	convexFn: FunctionReference<"query">,
+	getShared: () => Record<string, unknown>,
+	numItems: number,
+): Atom.Writable<Atom.PullResult<unknown, unknown>, void> => {
+	return runtime.pull(
+		Stream.paginateChunkEffect(null as string | null, (cursor) =>
+			Effect.gen(function* () {
+				const client = yield* ConvexClient;
+				const fullPayload = {
+					...getShared(),
+					cursor,
+					numItems,
+				};
+				const encodedExit = yield* client.query(
+					convexFn,
+					fullPayload as Record<string, unknown>,
+				);
+				const exit = decodeExit(encodedExit as EncodedExit);
+				if (Exit.isFailure(exit)) {
+					return yield* Effect.failCause(exit.cause);
+				}
+				const result = exit.value as PaginatedResult<unknown>;
+				const nextCursor = result.isDone
+					? Option.none<string | null>()
+					: Option.some(result.continueCursor);
+
+				return [Chunk.fromIterable(result.page), nextCursor] as const;
+			}),
+		),
+	);
+};
+
 const noop = () => {};
 
 export const makeClient = <
@@ -230,6 +317,10 @@ export const makeClient = <
 	const actionFns = new Map<
 		string,
 		Atom.AtomResultFn<unknown, unknown, unknown>
+	>();
+	const paginatedFamilies = new Map<
+		string,
+		(numItems: number) => Atom.Writable<Atom.PullResult<unknown, unknown>, void>
 	>();
 
 	const getQueryFamily = (tag: string) => {
@@ -278,6 +369,18 @@ export const makeClient = <
 		return fn;
 	};
 
+	const getPaginatedFamily = (tag: string) => {
+		let family = paginatedFamilies.get(tag);
+		if (!family) {
+			const convexFn = convexApi[tag] as FunctionReference<"query">;
+			family = Atom.family((numItems: number) =>
+				createPaginatedAtom(runtime, convexFn, getShared, numItems),
+			);
+			paginatedFamilies.set(tag, family);
+		}
+		return family;
+	};
+
 	const endpointProxyCache = new Map<string, unknown>();
 
 	const proxy = new Proxy(noop, {
@@ -300,6 +403,7 @@ export const makeClient = <
 						getSubscriptionFamily(prop)(payload),
 					mutate: getMutationFn(prop),
 					call: getActionFn(prop),
+					paginated: (numItems: number) => getPaginatedFamily(prop)(numItems),
 				};
 				endpointProxyCache.set(prop, endpointProxy);
 			}

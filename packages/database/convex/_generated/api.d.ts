@@ -8,9 +8,12 @@
  * @module
  */
 
+import type * as benchmarkMinimal from "../benchmarkMinimal.js";
+import type * as benchmarkNormal from "../benchmarkNormal.js";
 import type * as confect from "../confect.js";
 import type * as http from "../http.js";
 import type * as rpc_admin from "../rpc/admin.js";
+import type * as rpc_benchmark from "../rpc/benchmark.js";
 import type * as rpc_guestbook from "../rpc/guestbook.js";
 import type * as rpc_middleware from "../rpc/middleware.js";
 import type * as shared_betterAuth from "../shared/betterAuth.js";
@@ -23,9 +26,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  benchmarkMinimal: typeof benchmarkMinimal;
+  benchmarkNormal: typeof benchmarkNormal;
   confect: typeof confect;
   http: typeof http;
   "rpc/admin": typeof rpc_admin;
+  "rpc/benchmark": typeof rpc_benchmark;
   "rpc/guestbook": typeof rpc_guestbook;
   "rpc/middleware": typeof rpc_middleware;
   "shared/betterAuth": typeof shared_betterAuth;
