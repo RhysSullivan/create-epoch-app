@@ -1,11 +1,11 @@
-import { Console, Effect } from "effect";
-import { Discord } from "./core/discord-service";
 import { Reacord } from "@packages/reacord";
-import { GuestbookCommand } from "./commands/guestbook";
 import {
-	SlashCommandBuilder,
 	type ChatInputCommandInteraction,
+	SlashCommandBuilder,
 } from "discord.js";
+import { Console, Effect } from "effect";
+import { GuestbookCommand } from "./commands/guestbook";
+import { Discord } from "./core/discord-service";
 
 const guestbookCommandDef = new SlashCommandBuilder()
 	.setName("guestbook")

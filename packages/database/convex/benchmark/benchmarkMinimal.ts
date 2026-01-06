@@ -1,6 +1,6 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
-import { Effect, Schema, pipe, Exit } from "effect";
+import { Effect, Exit, pipe, Schema } from "effect";
 
 export const queryList = queryGeneric({
 	args: {

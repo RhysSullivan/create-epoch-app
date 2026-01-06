@@ -4,8 +4,8 @@ import {
 	RpcMiddleware,
 } from "@packages/confect/rpc";
 import { Effect, Schema } from "effect";
-import { ConfectMutationCtx, ConfectQueryCtx, confectSchema } from "../confect";
 import type { Id } from "../_generated/dataModel";
+import { ConfectMutationCtx, ConfectQueryCtx, confectSchema } from "../confect";
 
 const ADMIN_KEY = process.env.ADMIN_SECRET_KEY ?? "admin-secret";
 

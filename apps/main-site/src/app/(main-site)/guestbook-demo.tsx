@@ -1,10 +1,10 @@
 "use client";
 
 import { Result } from "@effect-atom/atom";
-import { useAtomValue, useAtom } from "@effect-atom/atom-react";
+import { useAtom } from "@effect-atom/atom-react";
 import {
-	useGuestbookSubscription,
 	guestbookClient,
+	useGuestbookSubscription,
 } from "@packages/react/guestbook-rpc";
 import { Button } from "@packages/ui/components/button";
 import { Input } from "@packages/ui/components/input";

@@ -5,7 +5,7 @@ import {
 	queryGeneric,
 } from "convex/server";
 import { v } from "convex/values";
-import { Effect, Context, Exit, pipe, Schema } from "effect";
+import { Context, Effect, Exit, pipe, Schema } from "effect";
 import type { DataModel } from "./_generated/dataModel";
 
 const QueryCtx = Context.GenericTag<GenericQueryCtx<DataModel>>("QueryCtx");

@@ -3,7 +3,6 @@
 import { Button } from "@packages/ui/components/button";
 import { cn } from "@packages/ui/lib/utils";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
-import * as React from "react";
 
 interface ErrorPageProps {
 	error: Error & { digest?: string };

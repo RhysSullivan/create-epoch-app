@@ -25,7 +25,7 @@ import {
 	Runtime,
 } from "effect";
 import { discordApiCalls, discordApiErrors } from "../metrics";
-import { DiscordClient, DiscordClientLayer } from "./discord-client-service";
+import { DiscordClient } from "./discord-client-service";
 
 export class DiscordAPIError extends Data.TaggedError("DiscordAPIError")<{
 	cause: RawDiscordAPIError;

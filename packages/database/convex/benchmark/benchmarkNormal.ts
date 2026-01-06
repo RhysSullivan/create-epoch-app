@@ -1,4 +1,4 @@
-import { queryGeneric, mutationGeneric } from "convex/server";
+import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 
 export const normalList = queryGeneric({

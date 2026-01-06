@@ -1,6 +1,6 @@
+import { Rpc } from "@effect/rpc";
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
-import { Rpc } from "@effect/rpc";
 
 export const queryList = queryGeneric({
 	args: {

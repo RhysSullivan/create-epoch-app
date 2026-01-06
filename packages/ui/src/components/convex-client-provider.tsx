@@ -1,12 +1,12 @@
 "use client";
 
+import { convexClient } from "@convex-dev/better-auth/client/plugins";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { Atom, RegistryProvider } from "@effect-atom/atom-react";
 import {
 	ConvexClient,
 	type ConvexClientService,
 } from "@packages/confect/client";
-import { convexClient } from "@convex-dev/better-auth/client/plugins";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { anonymousClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { ConvexClient as ConvexBrowserClient } from "convex/browser";

@@ -15,7 +15,6 @@ import { InstanceProvider } from "./instance-context";
 import { reconciler } from "./internal/reconciler";
 import {
 	createInteractionReplyRenderer,
-	type InteractionReplyOptions,
 	type Renderer,
 } from "./internal/renderer";
 

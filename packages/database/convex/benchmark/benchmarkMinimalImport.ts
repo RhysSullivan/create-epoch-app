@@ -1,14 +1,14 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import {
-	gen,
-	runPromise,
-	tryPromise,
-	succeed,
-	fail,
-	map,
-	flatMap,
 	catchAll,
+	fail,
+	flatMap,
+	gen,
+	map,
+	runPromise,
+	succeed,
+	tryPromise,
 } from "effect/Effect";
 
 export const queryList = queryGeneric({

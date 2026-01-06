@@ -1,10 +1,10 @@
 import {
 	createMicroRpcFactory,
-	makeMicroRpcModule,
+	Micro,
 	MicroMutationCtx,
 	MicroQueryCtx,
+	makeMicroRpcModule,
 	v,
-	Micro,
 } from "@packages/confect/rpc/micro";
 
 const microRpc = createMicroRpcFactory();
