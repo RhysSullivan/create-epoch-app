@@ -68,7 +68,7 @@ async function main() {
 
 	results.push(
 		await benchmark("RPC Query", () =>
-			client.query(api.rpc.benchmark.rpcList, { args: { nonce: nonce() } }),
+			client.query(api.rpc.benchmark.rpcList, { nonce: nonce() }),
 		),
 	);
 

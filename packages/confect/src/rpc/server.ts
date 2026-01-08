@@ -251,10 +251,10 @@ export const createRpcFactory = <
 		const encodeSuccess = Schema.encodeSync(successSchema);
 		const encodeError = errorSchema ? Schema.encodeSync(errorSchema) : (e: unknown) => e;
 
-		return async (rawCtx: GenericQueryCtx<GenericDataModel> | GenericMutationCtx<GenericDataModel> | GenericActionCtx<GenericDataModel>, wrappedArgs: { args: unknown }): Promise<ExitEncoded> => {
+		return async (rawCtx: GenericQueryCtx<GenericDataModel> | GenericMutationCtx<GenericDataModel> | GenericActionCtx<GenericDataModel>, args: unknown): Promise<ExitEncoded> => {
 			let decodedArgs: Schema.Struct.Type<PayloadFields>;
 			try {
-				decodedArgs = decodePayload(wrappedArgs.args);
+				decodedArgs = decodePayload(args);
 			} catch (err) {
 				return encodeExit(Exit.die(err), encodeSuccess, (e) => encodeError(e as Schema.Schema.Type<NonNullable<Error>>));
 			}
@@ -326,7 +326,7 @@ export const createRpcFactory = <
 						error: options.error,
 					});
 					const handlerFn = queryHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectQueryCtx<ConfectSchema> | MWProvides>);
-					const fn = queryGeneric({ args: { args: v.any() }, handler: handlerFn });
+					const fn = queryGeneric({ args: v.any(), handler: handlerFn });
 					return { _tag: tag, rpc, fn };
 				},
 			};
@@ -366,7 +366,7 @@ export const createRpcFactory = <
 						error: options.error,
 					});
 					const handlerFn = mutationHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectMutationCtx<ConfectSchema> | MWProvides>);
-					const fn = mutationGeneric({ args: { args: v.any() }, handler: handlerFn });
+					const fn = mutationGeneric({ args: v.any(), handler: handlerFn });
 					return { _tag: tag, rpc, fn };
 				},
 			};
@@ -406,7 +406,7 @@ export const createRpcFactory = <
 						error: options.error,
 					});
 					const handlerFn = actionHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectActionCtx<ConfectSchema> | MWProvides>);
-					const fn = actionGeneric({ args: { args: v.any() }, handler: handlerFn });
+					const fn = actionGeneric({ args: v.any(), handler: handlerFn });
 					return { _tag: tag, rpc, fn };
 				},
 			};
@@ -446,7 +446,7 @@ export const createRpcFactory = <
 						error: options.error,
 					});
 					const handlerFn = queryHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectQueryCtx<ConfectSchema> | MWProvides>);
-					const fn = internalQueryGeneric({ args: { args: v.any() }, handler: handlerFn });
+					const fn = internalQueryGeneric({ args: v.any(), handler: handlerFn });
 					return { _tag: tag, rpc, fn };
 				},
 			};
@@ -486,7 +486,7 @@ export const createRpcFactory = <
 						error: options.error,
 					});
 					const handlerFn = mutationHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectMutationCtx<ConfectSchema> | MWProvides>);
-					const fn = internalMutationGeneric({ args: { args: v.any() }, handler: handlerFn });
+					const fn = internalMutationGeneric({ args: v.any(), handler: handlerFn });
 					return { _tag: tag, rpc, fn };
 				},
 			};
@@ -526,7 +526,7 @@ export const createRpcFactory = <
 						error: options.error,
 					});
 					const handlerFn = actionHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectActionCtx<ConfectSchema> | MWProvides>);
-					const fn = internalActionGeneric({ args: { args: v.any() }, handler: handlerFn });
+					const fn = internalActionGeneric({ args: v.any(), handler: handlerFn });
 					return { _tag: tag, rpc, fn };
 				},
 			};
