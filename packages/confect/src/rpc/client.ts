@@ -6,7 +6,8 @@ import type {
 	RegisteredAction,
 } from "convex/server";
 import { Atom, Result } from "@effect-atom/atom";
-import { Chunk, Data, Effect, Exit, Option, Stream } from "effect";
+import * as Cause from "effect/Cause";
+import { Chunk, Data, Effect, Exit, FiberId, Option, Stream } from "effect";
 
 import { ConvexClient, ConvexClientLayer } from "../client";
 import type { AnyRpcModule, ExitEncoded, RpcEndpoint } from "./server";
@@ -117,32 +118,64 @@ export interface RpcModuleClientConfig {
 
 type ConvexApiModule = Record<string, FunctionReference<"query" | "mutation" | "action">>;
 
+type DecorateModuleEndpoints<TModule extends AnyRpcModule, Shared extends Record<string, unknown>> = {
+	[K in keyof TModule]: TModule[K] extends RpcEndpoint<string, Rpc.Any, unknown>
+		? DecorateEndpoint<TModule[K], Shared>
+		: never;
+};
+
+type ExtractDecoratedEndpoints<TModule extends AnyRpcModule, Shared extends Record<string, unknown>> = 
+	Pick<DecorateModuleEndpoints<TModule, Shared>, {
+		[K in keyof TModule]: TModule[K] extends RpcEndpoint<string, Rpc.Any, unknown> ? K : never;
+	}[keyof TModule]>;
+
 export type RpcModuleClient<
 	TModule extends AnyRpcModule,
 	Shared extends Record<string, unknown> = {},
 > = {
 	readonly runtime: Atom.AtomRuntime<ConvexClient>;
-} & RpcModuleClientMethods<TModule["_def"]["endpoints"], Shared>;
+} & ExtractDecoratedEndpoints<TModule, Shared>;
 
-interface CauseEncoded {
-	readonly _tag: "Fail" | "Die" | "Empty";
-	readonly error?: unknown;
-	readonly defect?: unknown;
-}
+type CauseEncoded<E = unknown, D = unknown> =
+	| { readonly _tag: "Empty" }
+	| { readonly _tag: "Fail"; readonly error: E }
+	| { readonly _tag: "Die"; readonly defect: D }
+	| { readonly _tag: "Interrupt"; readonly fiberId: unknown }
+	| { readonly _tag: "Sequential"; readonly left: CauseEncoded<E, D>; readonly right: CauseEncoded<E, D> }
+	| { readonly _tag: "Parallel"; readonly left: CauseEncoded<E, D>; readonly right: CauseEncoded<E, D> };
+
+const decodeCause = (encoded: CauseEncoded): Cause.Cause<unknown> => {
+	switch (encoded._tag) {
+		case "Empty":
+			return Cause.empty;
+		case "Fail":
+			return Cause.fail(encoded.error);
+		case "Die":
+			return Cause.die(encoded.defect);
+		case "Interrupt":
+			return Cause.interrupt(FiberId.none);
+		case "Sequential":
+			return Cause.sequential(decodeCause(encoded.left), decodeCause(encoded.right));
+		case "Parallel":
+			return Cause.parallel(decodeCause(encoded.left), decodeCause(encoded.right));
+	}
+};
 
 const decodeExit = (encoded: ExitEncoded): Exit.Exit<unknown, unknown> => {
 	if (encoded._tag === "Success") {
 		return Exit.succeed(encoded.value);
 	}
-	const cause = encoded.cause as CauseEncoded | undefined;
-	if (!cause) {
-		return Exit.fail(new RpcDefectError({ defect: "Unknown error" }));
+	const cause = decodeCause(encoded.cause);
+	const failureOption = Cause.failureOption(cause);
+	if (Option.isSome(failureOption)) {
+		return Exit.fail(failureOption.value);
 	}
-	if (cause._tag === "Fail") {
-		return Exit.fail(cause.error);
+	const defects = Cause.defects(cause);
+	if (Chunk.isNonEmpty(defects)) {
+		return Exit.fail(new RpcDefectError({ defect: Chunk.unsafeHead(defects) }));
 	}
-	if (cause._tag === "Die") {
-		return Exit.fail(new RpcDefectError({ defect: cause.defect }));
+	if (Cause.isInterrupted(cause)) {
+		return Exit.fail(new RpcDefectError({ defect: "Interrupted" }));
 	}
 	return Exit.fail(new RpcDefectError({ defect: "Empty cause" }));
 };

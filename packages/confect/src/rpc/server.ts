@@ -18,12 +18,10 @@ import {
 	internalActionGeneric,
 } from "convex/server";
 import { v } from "convex/values";
-import * as Cause from "effect/Cause";
-import * as Chunk from "effect/Chunk";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import { pipe } from "effect/Function";
+import type * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
 import {
@@ -119,58 +117,60 @@ export interface RpcFactoryConfig<
 	readonly middlewares?: Middlewares;
 }
 
-interface ExitEncoded {
-	readonly _tag: "Success" | "Failure";
-	readonly value?: unknown;
-	readonly cause?: unknown;
-}
+export type ExitEncoded<A = unknown, E = unknown, D = unknown> = Schema.ExitEncoded<A, E, D>;
 
-const serializeDefect = (defect: unknown): { _tag: string; message: string } => {
-	if (defect instanceof Error) {
-		return { _tag: defect.name || "Error", message: defect.message };
+const applyMiddleware = <A, E, R, Middlewares extends ReadonlyArray<MiddlewareEntry>>(
+	effect: Effect.Effect<A, E, R>,
+	payload: unknown,
+	middlewares: Middlewares,
+): Effect.Effect<A, E | MiddlewaresFailure<Middlewares>, Exclude<R, MiddlewaresProvides<Middlewares>>> => {
+	if (middlewares.length === 0) {
+		return effect as Effect.Effect<A, E | MiddlewaresFailure<Middlewares>, Exclude<R, MiddlewaresProvides<Middlewares>>>;
 	}
-	if (typeof defect === "object" && defect !== null && "_tag" in defect) {
-		const tagged = defect as { _tag: string; message?: string };
-		return { _tag: String(tagged._tag), message: String(tagged.message ?? "") };
-	}
-	return { _tag: "UnknownDefect", message: String(defect) };
-};
 
-const encodeExit = <A, E>(
-	exit: Exit.Exit<A, E>,
-	encodeSuccess: (a: A) => unknown,
-	encodeError: (e: E) => unknown,
-): ExitEncoded => {
-	if (Exit.isSuccess(exit)) {
-		return { _tag: "Success", value: encodeSuccess(exit.value) };
-	}
-	const failureOption = Cause.failureOption(exit.cause);
-	if (failureOption._tag === "Some") {
-		return {
-			_tag: "Failure",
-			cause: {
-				_tag: "Fail",
-				error: encodeError(failureOption.value),
-			},
-		};
-	}
-	const defectsChunk = Cause.defects(exit.cause);
-	const defectArray = Chunk.toArray(defectsChunk);
-	if (defectArray.length > 0) {
-		return {
-			_tag: "Failure",
-			cause: {
-				_tag: "Die",
-				defect: serializeDefect(defectArray[0]),
-			},
-		};
-	}
-	return {
-		_tag: "Failure",
-		cause: {
-			_tag: "Empty",
-		},
+	const options = {
+		clientId: 0,
+		rpc: {} as Rpc.AnyWithProps,
+		payload,
+		headers: {} as import("@effect/platform/Headers").Headers,
 	};
+
+	let result = effect as Effect.Effect<A, E | MiddlewaresFailure<Middlewares>, Exclude<R, MiddlewaresProvides<Middlewares>>>;
+
+	for (const middleware of middlewares) {
+		const middlewareTag = middleware.tag as RpcMiddleware.TagClassAny & {
+			provides?: Context.Tag<unknown, unknown>;
+			optional?: boolean;
+			wrap?: boolean;
+		};
+		const impl = middleware.impl as RpcMiddleware.RpcMiddleware<unknown, unknown>;
+
+		if (middlewareTag.wrap) {
+			const wrapImpl = impl as unknown as RpcMiddleware.RpcMiddlewareWrap<unknown, unknown>;
+			result = wrapImpl({ ...options, next: result as unknown as Effect.Effect<RpcMiddleware.SuccessValue, unknown, unknown> }) as unknown as typeof result;
+		} else if (middlewareTag.optional) {
+			const previous = result;
+			result = Effect.matchEffect(impl(options), {
+				onFailure: () => previous,
+				onSuccess: middlewareTag.provides !== undefined
+					? (value) => Effect.provideService(previous, middlewareTag.provides as Context.Tag<unknown, unknown>, value)
+					: (_) => previous,
+			}) as typeof result;
+		} else if (middlewareTag.provides !== undefined) {
+			result = Effect.provideServiceEffect(
+				result,
+				middlewareTag.provides,
+				impl(options),
+			) as typeof result;
+		} else {
+			result = Effect.zipRight(
+				impl(options),
+				result,
+			) as typeof result;
+		}
+	}
+
+	return result;
 };
 
 export const createRpcFactory = <
@@ -182,50 +182,10 @@ export const createRpcFactory = <
 ) => {
 	const tableSchemas = extractTableSchemas(config.schema.tables);
 	const basePayload = config.basePayload ?? ({} as BasePayload);
-	const middlewares = config.middlewares ?? [];
+	const middlewares = config.middlewares ?? ([] as unknown as Middlewares);
 
 	type MWProvides = MiddlewaresProvides<Middlewares>;
 	type MWFailure = MiddlewaresFailure<Middlewares>;
-
-	const applyMiddleware = <A, E, R>(
-		effect: Effect.Effect<A, E, R>,
-		payload: unknown,
-	): Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>> => {
-		if (middlewares.length === 0) {
-			return effect as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
-		}
-
-		const options = {
-			clientId: 0,
-			rpc: {} as Rpc.AnyWithProps,
-			payload,
-			headers: {} as import("@effect/platform/Headers").Headers,
-		};
-
-		let result = effect as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
-
-		for (const middleware of middlewares) {
-			const middlewareTag = middleware.tag as RpcMiddleware.TagClassAny & {
-				provides?: Context.Tag<unknown, unknown>;
-			};
-			const impl = middleware.impl as RpcMiddleware.RpcMiddleware<unknown, unknown>;
-
-			if (middlewareTag.provides !== undefined) {
-				result = Effect.provideServiceEffect(
-					result,
-					middlewareTag.provides,
-					impl(options),
-				) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
-			} else {
-				result = Effect.zipRight(
-					impl(options),
-					result,
-				) as Effect.Effect<A, E | MWFailure, Exclude<R, MWProvides>>;
-			}
-		}
-
-		return result;
-	};
 
 	type MergedPayload<P extends Schema.Struct.Fields> = BasePayload & P;
 
@@ -248,19 +208,24 @@ export const createRpcFactory = <
 	) => {
 		const payloadSchema = Schema.Struct(payloadFields) as unknown as Schema.Schema<Schema.Struct.Type<PayloadFields>, Schema.Struct.Encoded<PayloadFields>, never>;
 		const decodePayload = Schema.decodeUnknownSync(payloadSchema);
-		const encodeSuccess = Schema.encodeSync(successSchema);
-		const encodeError = errorSchema ? Schema.encodeSync(errorSchema) : (e: unknown) => e;
+		
+		const exitSchema = Schema.Exit({
+			success: successSchema as Schema.Schema<unknown, unknown, never>,
+			failure: (errorSchema ?? Schema.Never) as Schema.Schema<unknown, unknown, never>,
+			defect: Schema.Defect,
+		});
+		const encodeExit = Schema.encodeSync(exitSchema) as (exit: Exit.Exit<unknown, unknown>) => ExitEncoded;
 
 		return async (rawCtx: GenericQueryCtx<GenericDataModel> | GenericMutationCtx<GenericDataModel> | GenericActionCtx<GenericDataModel>, args: unknown): Promise<ExitEncoded> => {
 			let decodedArgs: Schema.Struct.Type<PayloadFields>;
 			try {
 				decodedArgs = decodePayload(args);
 			} catch (err) {
-				return encodeExit(Exit.die(err), encodeSuccess, (e) => encodeError(e as Schema.Schema.Type<NonNullable<Error>>));
+				return encodeExit(Exit.die(err));
 			}
 
 			const handlerEffect = handler(decodedArgs);
-			const withMiddleware = applyMiddleware(handlerEffect, decodedArgs);
+			const withMiddleware = applyMiddleware(handlerEffect, decodedArgs, middlewares);
 			const effect = Effect.provideService(
 				withMiddleware as Effect.Effect<Schema.Schema.Type<Success>, unknown, Ctx>,
 				ctxTag,
@@ -268,11 +233,7 @@ export const createRpcFactory = <
 			);
 
 			const exit = await Effect.runPromiseExit(effect);
-			return encodeExit(
-				exit,
-				(a) => encodeSuccess(a),
-				(e) => encodeError(e as Schema.Schema.Type<NonNullable<Error>>),
-			);
+			return encodeExit(exit);
 		};
 	};
 
@@ -624,4 +585,131 @@ export function makeRpcModule<
 }
 
 export { RpcMiddleware };
-export type { ExitEncoded };
+
+export type Handler<Tag extends string> = Rpc.Handler<Tag>;
+
+export type ToHandler<R extends Rpc.Any> = Rpc.ToHandler<R>;
+
+export const exitSchema = <R extends Rpc.Any>(rpc: R): Schema.Schema<Rpc.Exit<R>, Rpc.ExitEncoded<R>, Rpc.Context<R>> => {
+	return Rpc.exitSchema(rpc);
+};
+
+export const WrapperTypeId = Rpc.WrapperTypeId;
+export type WrapperTypeId = Rpc.WrapperTypeId;
+
+export type Wrapper<A> = Rpc.Wrapper<A>;
+
+export const isWrapper = Rpc.isWrapper;
+
+export const wrap = Rpc.wrap;
+
+export const fork = Rpc.fork;
+
+export const uninterruptible = Rpc.uninterruptible;
+
+export type HandlersFrom<R extends Rpc.Any> = RpcGroup.HandlersFrom<R>;
+
+export type HandlersContext<R extends Rpc.Any, Handlers> = RpcGroup.HandlersContext<R, Handlers>;
+
+export interface ConfectRpcGroup<R extends Rpc.Any> {
+	readonly group: RpcGroup.RpcGroup<R>;
+	
+	merge<const Groups extends ReadonlyArray<ConfectRpcGroup<Rpc.Any>>>(
+		...groups: Groups
+	): ConfectRpcGroup<R | ExtractRpcs<Groups[number]>>;
+	
+	middleware<M extends RpcMiddleware.TagClassAny>(middleware: M): ConfectRpcGroup<Rpc.AddMiddleware<R, M>>;
+	
+	prefix<const Prefix extends string>(prefix: Prefix): ConfectRpcGroup<Rpc.Prefixed<R, Prefix>>;
+	
+	toLayer<
+		Handlers extends HandlersFrom<R>,
+		EX = never,
+		RX = never,
+	>(
+		build: Handlers | Effect.Effect<Handlers, EX, RX>,
+	): Layer.Layer<ToHandler<R>, EX, Exclude<RX, import("effect/Scope").Scope> | HandlersContext<R, Handlers>>;
+	
+	toHandlersContext<
+		Handlers extends HandlersFrom<R>,
+		EX = never,
+		RX = never,
+	>(
+		build: Handlers | Effect.Effect<Handlers, EX, RX>,
+	): Effect.Effect<Context.Context<ToHandler<R>>, EX, RX | HandlersContext<R, Handlers>>;
+	
+	accessHandler<const Tag extends R["_tag"]>(
+		tag: Tag,
+	): Effect.Effect<
+		(payload: Rpc.Payload<Extract<R, { readonly _tag: Tag }>>, headers: import("@effect/platform/Headers").Headers) => Rpc.ResultFrom<Extract<R, { readonly _tag: Tag }>, never>,
+		never,
+		Handler<Tag>
+	>;
+	
+	annotate<I, S>(tag: Context.Tag<I, S>, value: S): ConfectRpcGroup<R>;
+	
+	annotateContext<I>(context: Context.Context<I>): ConfectRpcGroup<R>;
+}
+
+type ExtractRpcs<G> = G extends ConfectRpcGroup<infer R> ? R : never;
+
+const makeConfectRpcGroup = <R extends Rpc.Any>(group: RpcGroup.RpcGroup<R>): ConfectRpcGroup<R> => {
+	return {
+		group,
+		
+		merge<const Groups extends ReadonlyArray<ConfectRpcGroup<Rpc.Any>>>(
+			...groups: Groups
+		): ConfectRpcGroup<R | ExtractRpcs<Groups[number]>> {
+			const merged = group.merge(...groups.map((g) => g.group));
+			return makeConfectRpcGroup(merged) as ConfectRpcGroup<R | ExtractRpcs<Groups[number]>>;
+		},
+		
+		middleware<M extends RpcMiddleware.TagClassAny>(middleware: M): ConfectRpcGroup<Rpc.AddMiddleware<R, M>> {
+			return makeConfectRpcGroup(group.middleware(middleware));
+		},
+		
+		prefix<const Prefix extends string>(prefix: Prefix): ConfectRpcGroup<Rpc.Prefixed<R, Prefix>> {
+			return makeConfectRpcGroup(group.prefix(prefix));
+		},
+		
+		toLayer<
+			Handlers extends HandlersFrom<R>,
+			EX = never,
+			RX = never,
+		>(
+			build: Handlers | Effect.Effect<Handlers, EX, RX>,
+		) {
+			return group.toLayer(build as Handlers | Effect.Effect<Handlers, EX, RX>);
+		},
+		
+		toHandlersContext<
+			Handlers extends HandlersFrom<R>,
+			EX = never,
+			RX = never,
+		>(
+			build: Handlers | Effect.Effect<Handlers, EX, RX>,
+		) {
+			return group.toHandlersContext(build as Handlers | Effect.Effect<Handlers, EX, RX>);
+		},
+		
+		accessHandler<const Tag extends R["_tag"]>(
+			tag: Tag,
+		) {
+			return group.accessHandler(tag);
+		},
+		
+		annotate<I, S>(tag: Context.Tag<I, S>, value: S): ConfectRpcGroup<R> {
+			return makeConfectRpcGroup(group.annotate(tag, value));
+		},
+		
+		annotateContext<I>(context: Context.Context<I>): ConfectRpcGroup<R> {
+			return makeConfectRpcGroup(group.annotateContext(context));
+		},
+	};
+};
+
+export const makeGroup = <const Rpcs extends ReadonlyArray<Rpc.Any>>(
+	...rpcs: Rpcs
+): ConfectRpcGroup<Rpcs[number]> => {
+	return makeConfectRpcGroup(RpcGroup.make(...rpcs));
+};

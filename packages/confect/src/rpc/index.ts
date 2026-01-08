@@ -12,6 +12,19 @@ export {
 	type InferFn,
 	type InferModuleEndpoints,
 	type ExitEncoded,
+	exitSchema,
+	WrapperTypeId,
+	type Wrapper,
+	isWrapper,
+	wrap,
+	fork,
+	uninterruptible,
+	type Handler,
+	type ToHandler,
+	type HandlersFrom,
+	type HandlersContext,
+	makeGroup,
+	type ConfectRpcGroup,
 } from "./server";
 
 export {
