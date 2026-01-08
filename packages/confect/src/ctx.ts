@@ -18,7 +18,13 @@ import type {
 	WithoutSystemFields,
 } from "convex/server";
 import type { GenericId, Value } from "convex/values";
-import { Context, Effect, Option, Schema, Stream, Chunk, pipe } from "effect";
+import * as Chunk from "effect/Chunk";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { pipe } from "effect/Function";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import type {
 	GenericConfectSchema,

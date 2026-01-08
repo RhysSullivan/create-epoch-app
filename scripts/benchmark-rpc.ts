@@ -67,20 +67,14 @@ async function main() {
 	const results: Array<BenchmarkResult> = [];
 
 	results.push(
+		await benchmark("RPC Query", () =>
+			client.query(api.rpc.benchmark.rpcList, { args: { nonce: nonce() } }),
+		),
+	);
+
+	results.push(
 		await benchmark("Vanilla Convex Query", () =>
 			client.query(api.rpc.benchmark.vanillaList, { nonce: nonce() }),
-		),
-	);
-
-	results.push(
-		await benchmark("Confect Query", () =>
-			client.query(api.rpc.benchmark.confectList, { nonce: nonce() }),
-		),
-	);
-
-	results.push(
-		await benchmark("RPC Query", () =>
-			client.query(api.rpc.benchmark.rpcList, { nonce: nonce() }),
 		),
 	);
 

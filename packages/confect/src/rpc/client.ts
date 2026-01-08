@@ -143,6 +143,8 @@ const decodeExit = (encoded: ExitEncoded): Exit.Exit<unknown, unknown> => {
 	return Exit.fail(new RpcDefectError("Empty cause"));
 };
 
+const wrapArgs = (payload: unknown): Record<string, unknown> => ({ args: payload });
+
 const createQueryAtom = (
 	runtime: Atom.AtomRuntime<ConvexClient>,
 	convexFn: FunctionReference<"query">,
@@ -151,7 +153,7 @@ const createQueryAtom = (
 	return runtime.atom(
 		Effect.gen(function* () {
 			const client = yield* ConvexClient;
-			const encodedExit = yield* client.query(convexFn, payload as Record<string, unknown>);
+			const encodedExit = yield* client.query(convexFn, wrapArgs(payload));
 			const exit = decodeExit(encodedExit as ExitEncoded);
 			if (Exit.isSuccess(exit)) {
 				return exit.value;
@@ -170,7 +172,7 @@ const createSubscriptionAtom = (
 		Stream.unwrap(
 			Effect.gen(function* () {
 				const client = yield* ConvexClient;
-				return client.subscribe(convexFn, payload as Record<string, unknown>).pipe(
+				return client.subscribe(convexFn, wrapArgs(payload)).pipe(
 					Stream.mapEffect((encodedExit) => {
 						const exit = decodeExit(encodedExit as ExitEncoded);
 						if (Exit.isSuccess(exit)) {
@@ -193,7 +195,7 @@ const createMutationFn = (
 		Effect.fnUntraced(function* (payload) {
 			const client = yield* ConvexClient;
 			const fullPayload = { ...getShared(), ...(payload as object) };
-			const encodedExit = yield* client.mutation(convexFn, fullPayload as Record<string, unknown>);
+			const encodedExit = yield* client.mutation(convexFn, wrapArgs(fullPayload));
 			const exit = decodeExit(encodedExit as ExitEncoded);
 			if (Exit.isSuccess(exit)) {
 				return exit.value;
@@ -212,7 +214,7 @@ const createActionFn = (
 		Effect.fnUntraced(function* (payload) {
 			const client = yield* ConvexClient;
 			const fullPayload = { ...getShared(), ...(payload as object) };
-			const encodedExit = yield* client.action(convexFn, fullPayload as Record<string, unknown>);
+			const encodedExit = yield* client.action(convexFn, wrapArgs(fullPayload));
 			const exit = decodeExit(encodedExit as ExitEncoded);
 			if (Exit.isSuccess(exit)) {
 				return exit.value;
@@ -243,7 +245,7 @@ const createPaginatedAtom = (
 					cursor,
 					numItems,
 				};
-				const encodedExit = yield* client.query(convexFn, fullPayload as Record<string, unknown>);
+				const encodedExit = yield* client.query(convexFn, wrapArgs(fullPayload));
 				const exit = decodeExit(encodedExit as ExitEncoded);
 				if (Exit.isFailure(exit)) {
 					return yield* Effect.failCause(exit.cause);

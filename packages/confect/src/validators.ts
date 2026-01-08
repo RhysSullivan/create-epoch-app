@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import type {
 	GenericId,
-	PropertyValidators,
 	Validator,
 } from "convex/values";
 import { Option, Schema, SchemaAST } from "effect";
@@ -190,33 +189,6 @@ export const schemaToValidator = <S extends Schema.Schema.AnyNoContext>(
 ): Validator<S["Encoded"], "required", string> => {
 	const ast = Schema.encodedSchema(schema).ast;
 	return compileAst(ast) as Validator<S["Encoded"], "required", string>;
-};
-
-export const schemaToArgsValidator = <S extends Schema.Schema.AnyNoContext>(
-	schema: S,
-): PropertyValidators => {
-	const ast = Schema.encodedSchema(schema).ast;
-
-	if (ast._tag !== "TypeLiteral") {
-		throw new TopLevelMustBeObjectError();
-	}
-
-	if (ast.indexSignatures.length > 0) {
-		throw new IndexSignaturesNotSupportedError();
-	}
-
-	const fields: PropertyValidators = {};
-
-	for (const prop of ast.propertySignatures) {
-		if (typeof prop.name !== "string") {
-			continue;
-		}
-
-		const validator = compileAst(prop.type, prop.isOptional);
-		fields[prop.name] = prop.isOptional ? v.optional(validator) : validator;
-	}
-
-	return fields;
 };
 
 type IdSchema<TableName extends string> = Schema.Schema<
