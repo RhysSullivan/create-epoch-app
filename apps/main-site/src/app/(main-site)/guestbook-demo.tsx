@@ -48,6 +48,7 @@ export function GuestbookDemo() {
 				</Button>
 			</form>
 
+			{/* Subscription streams never complete, so Result.isWaiting stays true forever even with data */}
 			{Result.isInitial(entriesResult) ? (
 				<p className="text-muted-foreground text-sm">Loading...</p>
 			) : Result.isFailure(entriesResult) ? (
