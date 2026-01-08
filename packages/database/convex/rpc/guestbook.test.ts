@@ -104,4 +104,55 @@ layer(TestLayer)("guestbook RPC module", (it) => {
 			}
 		}),
 	);
+
+	it.effect("should paginate entries", () =>
+		Effect.gen(function* () {
+			const client = yield* ConvexClient;
+
+			for (let i = 1; i <= 5; i++) {
+				yield* client.mutation(api.rpc.guestbook.add, {
+					name: `User${i}`,
+					message: `Message ${i}`,
+				});
+			}
+
+			const page1Result = (yield* client.query(
+				api.rpc.guestbook.listPaginated,
+				{
+					cursor: null,
+					numItems: 2,
+				},
+			)) as ExitEncoded;
+
+			expect(page1Result._tag).toBe("Success");
+			if (page1Result._tag === "Success") {
+				const page1 = page1Result.value as {
+					page: Array<{ name: string; message: string }>;
+					isDone: boolean;
+					continueCursor: string;
+				};
+				expect(page1.page).toHaveLength(2);
+				expect(page1.isDone).toBe(false);
+				expect(page1.continueCursor).toBeDefined();
+
+				const page2Result = (yield* client.query(
+					api.rpc.guestbook.listPaginated,
+					{
+						cursor: page1.continueCursor,
+						numItems: 2,
+					},
+				)) as ExitEncoded;
+
+				expect(page2Result._tag).toBe("Success");
+				if (page2Result._tag === "Success") {
+					const page2 = page2Result.value as {
+						page: Array<{ name: string; message: string }>;
+						isDone: boolean;
+						continueCursor: string;
+					};
+					expect(page2.page).toHaveLength(2);
+				}
+			}
+		}),
+	);
 });

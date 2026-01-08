@@ -34,3 +34,9 @@ export {
 } from "./ctx";
 
 export { ConvexClient, ConvexClientLayer, type ConvexClientService } from "./client";
+
+export {
+	Cursor,
+	PaginationOptionsSchema,
+	PaginationResultSchema,
+} from "./pagination";

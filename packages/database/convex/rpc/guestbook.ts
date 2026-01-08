@@ -1,4 +1,9 @@
 import { createRpcFactory, makeRpcModule } from "@packages/confect/rpc";
+import {
+	Cursor,
+	PaginationOptionsSchema,
+	PaginationResultSchema,
+} from "@packages/confect";
 import { Effect, Schema } from "effect";
 import { ConfectMutationCtx, ConfectQueryCtx, confectSchema } from "../confect";
 
@@ -30,6 +35,31 @@ const guestbookModule = makeRpcModule({
 		}),
 	),
 
+	listPaginated: factory.query(
+		{
+			payload: PaginationOptionsSchema.fields,
+			success: PaginationResultSchema(Entry),
+		},
+		(args) =>
+			Effect.gen(function* () {
+				const ctx = yield* ConfectQueryCtx;
+				const result = yield* ctx.db.query("guestbook").order("desc").paginate({
+					cursor: args.cursor,
+					numItems: args.numItems,
+				});
+				return {
+					page: result.page.map((e) => ({
+						_id: String(e._id),
+						_creationTime: e._creationTime,
+						name: e.name,
+						message: e.message,
+					})),
+					isDone: result.isDone,
+					continueCursor: Cursor.make(result.continueCursor),
+				};
+			}),
+	),
+
 	add: factory.mutation(
 		{
 			payload: {
@@ -58,6 +88,6 @@ const guestbookModule = makeRpcModule({
 	),
 });
 
-export const { list, add } = guestbookModule.handlers;
+export const { list, listPaginated, add } = guestbookModule.handlers;
 export { guestbookModule, EmptyFieldError };
 export type GuestbookModule = typeof guestbookModule;
