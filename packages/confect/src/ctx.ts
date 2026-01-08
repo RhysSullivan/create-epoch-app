@@ -77,13 +77,10 @@ interface ConfectOrderedQuery<
 	TableName extends TableNamesInSchema<Tables>,
 > extends Omit<ConfectQuery<Tables, TableName>, "order"> {}
 
-export class NotUniqueError extends Error {
-	readonly _tag = "NotUniqueError";
-	constructor() {
-		super("Query returned more than one result");
-		this.name = "NotUniqueError";
-	}
-}
+export class NotUniqueError extends Schema.TaggedError<NotUniqueError>()(
+	"NotUniqueError",
+	{},
+) {}
 
 interface QueryLike {
 	[Symbol.asyncIterator](): AsyncIterator<Record<string, Value>>;

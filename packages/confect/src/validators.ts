@@ -1,9 +1,6 @@
 import { v } from "convex/values";
-import type {
-	GenericId,
-	Validator,
-} from "convex/values";
-import { Option, Schema, SchemaAST } from "effect";
+import type { GenericId, Validator } from "convex/values";
+import { Data, Option, Schema, SchemaAST } from "effect";
 
 const getIdTableName = (ast: SchemaAST.AST): Option.Option<string> => {
 	const annotations = ast.annotations;
@@ -17,26 +14,15 @@ const getIdTableName = (ast: SchemaAST.AST): Option.Option<string> => {
 	return Option.none();
 };
 
-class UnsupportedSchemaError extends Error {
-	constructor(schemaType: string) {
-		super(`Unsupported schema type: ${schemaType}`);
-		this.name = "UnsupportedSchemaError";
-	}
-}
+export class UnsupportedSchemaError extends Data.TaggedError("UnsupportedSchemaError")<{
+	readonly schemaType: string;
+}> {}
 
-class TopLevelMustBeObjectError extends Error {
-	constructor() {
-		super("Top level schema must be an object");
-		this.name = "TopLevelMustBeObjectError";
-	}
-}
+export class TopLevelMustBeObjectError extends Data.TaggedError("TopLevelMustBeObjectError")<{}> {}
 
-class IndexSignaturesNotSupportedError extends Error {
-	constructor() {
-		super("Index signatures are not supported");
-		this.name = "IndexSignaturesNotSupportedError";
-	}
-}
+export class IndexSignaturesNotSupportedError extends Data.TaggedError(
+	"IndexSignaturesNotSupportedError",
+)<{}> {}
 
 type AnyValidator = Validator<unknown, "required" | "optional", string>;
 type RequiredValidator = Validator<unknown, "required", string>;
@@ -54,7 +40,7 @@ const compileAst = (
 			if (typeof literal === "string" || typeof literal === "number" || typeof literal === "bigint" || typeof literal === "boolean") {
 				return v.literal(literal);
 			}
-			throw new UnsupportedSchemaError("Literal");
+			throw new UnsupportedSchemaError({ schemaType: "Literal" });
 		}
 
 		case "BooleanKeyword":
@@ -97,7 +83,7 @@ const compileAst = (
 			return v.bytes();
 
 		default:
-			throw new UnsupportedSchemaError(ast._tag);
+			throw new UnsupportedSchemaError({ schemaType: ast._tag });
 	}
 };
 

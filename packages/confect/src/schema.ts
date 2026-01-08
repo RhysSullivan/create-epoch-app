@@ -14,7 +14,7 @@ import {
 	type SystemIndexes,
 	type IdField,
 } from "convex/server";
-import type { GenericId, Validator } from "convex/values";
+import type { Validator } from "convex/values";
 import { Record, Schema } from "effect";
 
 import { schemaToObjectValidator } from "./validators";

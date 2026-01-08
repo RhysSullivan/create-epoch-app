@@ -1,15 +1,19 @@
 import type { Rpc } from "@effect/rpc";
-import type { FunctionReference, RegisteredQuery, RegisteredMutation, RegisteredAction } from "convex/server";
+import type {
+	FunctionReference,
+	RegisteredQuery,
+	RegisteredMutation,
+	RegisteredAction,
+} from "convex/server";
 import { Atom, Result } from "@effect-atom/atom";
-import { Cause, Chunk, Effect, Exit, Option, pipe, Stream } from "effect";
+import { Chunk, Data, Effect, Exit, Option, Stream } from "effect";
 
 import { ConvexClient, ConvexClientLayer } from "../client";
-import type { RpcEndpoint, AnyRpcModule, ExitEncoded } from "./server";
+import type { AnyRpcModule, ExitEncoded, RpcEndpoint } from "./server";
 
-export class RpcDefectError {
-	readonly _tag = "RpcDefectError";
-	constructor(readonly defect: unknown) {}
-}
+export class RpcDefectError extends Data.TaggedError("RpcDefectError")<{
+	readonly defect: unknown;
+}> {}
 
 type EndpointPayload<E> = E extends RpcEndpoint<infer _Tag, infer R, infer _ConvexFn>
 	? Rpc.Payload<R>
@@ -132,15 +136,15 @@ const decodeExit = (encoded: ExitEncoded): Exit.Exit<unknown, unknown> => {
 	}
 	const cause = encoded.cause as CauseEncoded | undefined;
 	if (!cause) {
-		return Exit.fail(new RpcDefectError("Unknown error"));
+		return Exit.fail(new RpcDefectError({ defect: "Unknown error" }));
 	}
 	if (cause._tag === "Fail") {
 		return Exit.fail(cause.error);
 	}
 	if (cause._tag === "Die") {
-		return Exit.fail(new RpcDefectError(cause.defect));
+		return Exit.fail(new RpcDefectError({ defect: cause.defect }));
 	}
-	return Exit.fail(new RpcDefectError("Empty cause"));
+	return Exit.fail(new RpcDefectError({ defect: "Empty cause" }));
 };
 
 const wrapArgs = (payload: unknown): Record<string, unknown> => ({ args: payload });
