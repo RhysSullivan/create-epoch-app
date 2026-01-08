@@ -1,20 +1,23 @@
 import {
-	type ConfectDataModelFromConfectSchemaDefinition,
-	ConfectMutationCtx as ConfectMutationCtxService,
+	ConfectMutationCtx as ConfectMutationCtxTag,
 	type ConfectMutationCtx as ConfectMutationCtxType,
-	ConfectQueryCtx as ConfectQueryCtxService,
+	ConfectQueryCtx as ConfectQueryCtxTag,
 	type ConfectQueryCtx as ConfectQueryCtxType,
-} from "@packages/confect/server";
+	ConfectActionCtx as ConfectActionCtxTag,
+	type ConfectActionCtx as ConfectActionCtxType,
+} from "@packages/confect/ctx";
+import { type TablesFromSchemaDefinition } from "@packages/confect/schema";
 import { confectSchema } from "./schema";
 
 export { confectSchema };
 
-type ConfectDataModel = ConfectDataModelFromConfectSchemaDefinition<
-	typeof confectSchema
->;
+type Tables = TablesFromSchemaDefinition<typeof confectSchema>;
 
-export const ConfectQueryCtx = ConfectQueryCtxService<ConfectDataModel>();
-export type ConfectQueryCtx = ConfectQueryCtxType<ConfectDataModel>;
+export const ConfectQueryCtx = ConfectQueryCtxTag<Tables>();
+export type ConfectQueryCtx = ConfectQueryCtxType<Tables>;
 
-export const ConfectMutationCtx = ConfectMutationCtxService<ConfectDataModel>();
-export type ConfectMutationCtx = ConfectMutationCtxType<ConfectDataModel>;
+export const ConfectMutationCtx = ConfectMutationCtxTag<Tables>();
+export type ConfectMutationCtx = ConfectMutationCtxType<Tables>;
+
+export const ConfectActionCtx = ConfectActionCtxTag<Tables>();
+export type ConfectActionCtx = ConfectActionCtxType<Tables>;

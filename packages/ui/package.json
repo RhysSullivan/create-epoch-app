@@ -14,6 +14,7 @@
 		"@convex-dev/better-auth": "catalog:",
 		"@effect-atom/atom-react": "catalog:",
 		"@packages/confect": "workspace:*",
+		"@packages/database": "workspace:*",
 		"effect": "catalog:",
 
 		"@radix-ui/react-accordion": "^1.2.12",
@@ -89,6 +90,7 @@
 		"./hooks/*": "./src/hooks/*.ts",
 		"./hooks/use-scroll-container": "./src/hooks/use-scroll-container.tsx",
 		"./icons/index": "./src/icons/index.tsx",
-		"./components/code": "./src/components/code.tsx"
+		"./components/code": "./src/components/code.tsx",
+		"./rpc/*": "./src/rpc/*.ts"
 	}
 }

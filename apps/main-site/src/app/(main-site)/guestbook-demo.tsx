@@ -1,116 +1,84 @@
 "use client";
 
-import { Result } from "@effect-atom/atom";
-import { useAtom } from "@effect-atom/atom-react";
-import {
-	guestbookClient,
-	useGuestbookSubscription,
-} from "@packages/react/guestbook-rpc";
+import { Result, useAtom, useAtomValue } from "@effect-atom/atom-react";
+import { Option } from "effect";
 import { Button } from "@packages/ui/components/button";
 import { Input } from "@packages/ui/components/input";
-import { Cause, Exit } from "effect";
+import { guestbookClient } from "@packages/ui/rpc/guestbook";
 import { useState } from "react";
 
+const entriesAtom = guestbookClient.list.subscription(undefined);
+
 export function GuestbookDemo() {
-	const result = useGuestbookSubscription();
-	const [addResult, addEntry] = useAtom(guestbookClient.add.mutate, {
-		mode: "promiseExit",
-	});
+	const entriesResult = useAtomValue(entriesAtom);
+	const [addResult, addEntry] = useAtom(guestbookClient.add.mutate);
 	const [name, setName] = useState("");
 	const [message, setMessage] = useState("");
-	const [error, setError] = useState<string | null>(null);
 
 	const isSubmitting = Result.isWaiting(addResult);
 
-	const handleSubmit = async (e: React.FormEvent) => {
+	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!name.trim() || !message.trim() || isSubmitting) return;
+		if (!name.trim() || !message.trim()) return;
 
-		setError(null);
-
-		const exit = await addEntry({
-			name: name.trim(),
-			message: message.trim(),
-		});
-
-		if (Exit.isSuccess(exit)) {
-			setName("");
-			setMessage("");
-		} else {
-			setError(Cause.pretty(exit.cause));
-		}
+		addEntry({ name: name.trim(), message: message.trim() });
+		setName("");
+		setMessage("");
 	};
 
 	return (
-		<div className="w-full max-w-md space-y-6">
-			<div className="rounded-lg border bg-card p-6">
-				<h2 className="mb-4 text-xl font-semibold">Guestbook</h2>
-				<form onSubmit={handleSubmit} className="space-y-3">
-					<Input
-						placeholder="Your name"
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						maxLength={50}
-						disabled={isSubmitting}
-					/>
-					<Input
-						placeholder="Leave a message..."
-						value={message}
-						onChange={(e) => setMessage(e.target.value)}
-						maxLength={500}
-						disabled={isSubmitting}
-					/>
-					<Button
-						type="submit"
-						className="w-full"
-						disabled={!name.trim() || !message.trim() || isSubmitting}
-					>
-						{isSubmitting ? "Signing..." : "Sign Guestbook"}
-					</Button>
-				</form>
+		<div className="w-full max-w-md rounded-lg border p-6">
+			<h2 className="mb-4 text-xl font-semibold">Guestbook</h2>
 
-				{error && (
-					<div className="mt-3 rounded bg-destructive/10 p-3 text-sm text-destructive">
-						Error: {error}
-					</div>
-				)}
-			</div>
+			<form onSubmit={handleSubmit} className="mb-6 space-y-3">
+				<Input
+					placeholder="Your name"
+					value={name}
+					onChange={(e) => setName(e.target.value)}
+					disabled={isSubmitting}
+				/>
+				<Input
+					placeholder="Your message"
+					value={message}
+					onChange={(e) => setMessage(e.target.value)}
+					disabled={isSubmitting}
+				/>
+				<Button type="submit" disabled={isSubmitting} className="w-full">
+					{isSubmitting ? "Signing..." : "Sign Guestbook"}
+				</Button>
+			</form>
 
-			<div className="rounded-lg border bg-card p-6">
-				<h3 className="mb-4 font-medium">Messages</h3>
-
-				{Result.builder(result)
-					.onInitial(() => (
-						<div className="flex items-center gap-2 text-muted-foreground">
-							<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-							Loading...
-						</div>
-					))
-					.onFailure((cause) => (
-						<div className="rounded bg-destructive/10 p-3 text-sm text-destructive">
-							Error: {Cause.pretty(cause)}
-						</div>
-					))
-					.onSuccess((entries) =>
-						entries.length === 0 ? (
-							<p className="text-muted-foreground">
-								No messages yet. Be the first to sign!
+			{Result.isInitial(entriesResult) || Result.isWaiting(entriesResult) ? (
+				<p className="text-muted-foreground text-sm">Loading...</p>
+			) : Result.isFailure(entriesResult) ? (
+				<p className="text-sm text-red-500">Error loading entries</p>
+			) : (
+				(() => {
+					const entriesOption = Result.value(entriesResult);
+					const entries = Option.isSome(entriesOption)
+						? entriesOption.value
+						: [];
+					if (entries.length === 0) {
+						return (
+							<p className="text-muted-foreground text-sm">
+								No entries yet. Be the first!
 							</p>
-						) : (
-							<ul className="space-y-3">
-								{entries.map((entry) => (
-									<li key={entry._id} className="rounded-md bg-muted/50 p-3">
-										<p className="font-medium">{entry.name}</p>
-										<p className="mt-1 text-sm text-muted-foreground">
-											{entry.message}
-										</p>
-									</li>
-								))}
-							</ul>
-						),
-					)
-					.render()}
-			</div>
+						);
+					}
+					return (
+						<ul className="space-y-3">
+							{entries.slice(0, 10).map((entry) => (
+								<li key={entry._id} className="border-b pb-2 last:border-b-0">
+									<p className="font-medium">{entry.name}</p>
+									<p className="text-muted-foreground text-sm">
+										{entry.message}
+									</p>
+								</li>
+							))}
+						</ul>
+					);
+				})()
+			)}
 		</div>
 	);
 }

@@ -4,9 +4,9 @@ import { v } from "convex/values";
 import * as Context from "effect/Context";
 import * as Micro from "effect/Micro";
 
-type RawQueryCtx = GenericQueryCtx<import("./_generated/dataModel").DataModel>;
+type RawQueryCtx = GenericQueryCtx<import("../_generated/dataModel").DataModel>;
 type RawMutationCtx = GenericMutationCtx<
-	import("./_generated/dataModel").DataModel
+	import("../_generated/dataModel").DataModel
 >;
 
 class MicroQueryCtx extends Context.Tag("MicroQueryCtx")<

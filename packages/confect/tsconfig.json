@@ -1,17 +1,12 @@
 {
+	"extends": "../typescript-config/base.json",
 	"compilerOptions": {
-		"target": "ESNext",
+		"outDir": "./dist",
 		"module": "ESNext",
-		"moduleResolution": "Bundler",
-		"lib": ["ES2022", "dom"],
-		"strict": true,
-		"skipLibCheck": true,
-		"noEmit": true,
-		"isolatedModules": true,
-		"allowSyntheticDefaultImports": true,
-		"forceConsistentCasingInFileNames": true,
+		"moduleResolution": "bundler",
+		"rootDir": ".",
 		"types": ["node"]
 	},
 	"include": ["src/**/*"],
-	"exclude": ["node_modules"]
+	"exclude": ["node_modules", "dist"]
 }

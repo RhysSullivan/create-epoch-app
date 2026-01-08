@@ -1,55 +1,30 @@
-import { Result } from "@effect-atom/atom";
-import { RpcModuleClient } from "@packages/confect/rpc";
-import { api } from "@packages/database/convex/_generated/api";
-import type { GuestbookEndpoints } from "@packages/database/convex/rpc/guestbook";
 import {
 	ActionRow,
-	Button,
 	Container,
+	ModalButton,
+	Result,
+	Section,
+	Separator,
 	TextDisplay,
-	useAtomSet,
+	useAtom,
 	useAtomValue,
 } from "@packages/reacord";
-import { Cause } from "effect";
 import { useState } from "react";
+import { guestbookClient } from "../rpc/guestbook";
 
-const CONVEX_URL = process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
-if (!CONVEX_URL) {
-	throw new Error(
-		"CONVEX_URL or NEXT_PUBLIC_CONVEX_URL environment variable is required",
-	);
-}
-const PRIVATE_ACCESS_KEY = process.env.PRIVATE_ACCESS_KEY ?? "test-key";
-
-type SharedPayload = { privateAccessKey: string };
-
-const guestbookClient = RpcModuleClient.makeClientWithShared<
-	GuestbookEndpoints,
-	SharedPayload
->(api.rpc.guestbook, { url: CONVEX_URL }, () => ({
-	privateAccessKey: PRIVATE_ACCESS_KEY,
-}));
-
-const listAtom = guestbookClient.list.subscription({});
+type GuestbookEntry = {
+	_id: string;
+	_creationTime: number;
+	name: string;
+	message: string;
+};
 
 export function GuestbookCommand() {
-	const result = useAtomValue(listAtom);
-	const addEntry = useAtomSet(guestbookClient.add.mutate);
+	const entriesResult = useAtomValue(guestbookClient.list.subscription({}));
+	const [, triggerAdd] = useAtom(guestbookClient.add.mutate);
 	const [isAdding, setIsAdding] = useState(false);
 
-	const handleAdd = async () => {
-		setIsAdding(true);
-		try {
-			await addEntry({
-				name: "Discord User",
-				message: `Signed from Discord at ${new Date().toLocaleString()}`,
-			});
-		} finally {
-			setIsAdding(false);
-		}
-	};
-
-	if (Result.isInitial(result)) {
+	if (Result.isInitial(entriesResult)) {
 		return (
 			<Container>
 				<TextDisplay>Loading guestbook...</TextDisplay>
@@ -57,35 +32,99 @@ export function GuestbookCommand() {
 		);
 	}
 
-	if (Result.isFailure(result)) {
+	if (Result.isFailure(entriesResult)) {
 		return (
 			<Container>
-				<TextDisplay>Error: {Cause.pretty(result.cause)}</TextDisplay>
+				<TextDisplay>Failed to load guestbook entries.</TextDisplay>
 			</Container>
 		);
 	}
 
-	const entries = result.value;
+	const entries = entriesResult.value as ReadonlyArray<GuestbookEntry>;
 
 	return (
 		<Container>
-			<TextDisplay>
-				**Guestbook** ({entries.length} messages)
-				{"\n\n"}
-				{entries.length === 0
-					? "_No messages yet. Be the first to sign!_"
-					: entries
-							.slice(0, 5)
-							.map((e) => `**${e.name}**: ${e.message}`)
-							.join("\n")}
-				{entries.length > 5 && `\n\n_...and ${entries.length - 5} more_`}
-			</TextDisplay>
+			<Section>
+				<TextDisplay>**Guestbook** ({entries.length} entries)</TextDisplay>
+			</Section>
+
+			<Separator />
+
+			{entries.length === 0 ? (
+				<Section>
+					<TextDisplay>No entries yet. Be the first to sign!</TextDisplay>
+				</Section>
+			) : (
+				entries.slice(0, 5).map((entry) => (
+					<Section key={entry._id}>
+						<TextDisplay>
+							**{entry.name}**: {entry.message}
+						</TextDisplay>
+					</Section>
+				))
+			)}
+
+			{entries.length > 5 && (
+				<Section>
+					<TextDisplay>...and {entries.length - 5} more</TextDisplay>
+				</Section>
+			)}
+
+			<Separator />
+
 			<ActionRow>
-				<Button
+				<ModalButton
 					style="primary"
+					label="Sign Guestbook"
 					disabled={isAdding}
-					label={isAdding ? "Signing..." : "Sign Guestbook"}
-					onClick={handleAdd}
+					modalTitle="Sign the Guestbook"
+					fields={[
+						{
+							type: "textInput",
+							id: "name",
+							label: "Your Name",
+							placeholder: "Enter your name",
+							required: true,
+							maxLength: 100,
+						},
+						{
+							type: "textInput",
+							id: "message",
+							label: "Your Message",
+							placeholder: "Leave a message",
+							style: "paragraph",
+							required: true,
+							maxLength: 500,
+						},
+					]}
+					onSubmit={async (values, interaction) => {
+						const name = values.getTextInput("name");
+						const message = values.getTextInput("message");
+
+						if (!name || !message) {
+							await interaction.reply({
+								content: "Please fill in all fields.",
+								flags: ["Ephemeral"],
+							});
+							return;
+						}
+
+						setIsAdding(true);
+						try {
+							triggerAdd({ name, message });
+							await interaction.reply({
+								content: `Thanks for signing, ${name}!`,
+								flags: ["Ephemeral"],
+							});
+						} catch {
+							await interaction.reply({
+								content: "Failed to add entry. Please try again.",
+								flags: ["Ephemeral"],
+							});
+						} finally {
+							setIsAdding(false);
+						}
+					}}
 				/>
 			</ActionRow>
 		</Container>

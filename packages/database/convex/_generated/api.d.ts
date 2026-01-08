@@ -9,10 +9,8 @@
  */
 
 import type * as benchmark_benchmarkEffectNoSchema from "../benchmark/benchmarkEffectNoSchema.js";
-import type * as benchmark_benchmarkEffectRpc from "../benchmark/benchmarkEffectRpc.js";
 import type * as benchmark_benchmarkEffectWithSchema from "../benchmark/benchmarkEffectWithSchema.js";
 import type * as benchmark_benchmarkMicro from "../benchmark/benchmarkMicro.js";
-import type * as benchmark_benchmarkMicroRpc from "../benchmark/benchmarkMicroRpc.js";
 import type * as benchmark_benchmarkMinimal from "../benchmark/benchmarkMinimal.js";
 import type * as benchmark_benchmarkMinimalImport from "../benchmark/benchmarkMinimalImport.js";
 import type * as benchmark_benchmarkNoEffect from "../benchmark/benchmarkNoEffect.js";
@@ -21,10 +19,8 @@ import type * as benchmark_benchmarkOnlyImport from "../benchmark/benchmarkOnlyI
 import type * as benchmark_benchmarkSubmodule from "../benchmark/benchmarkSubmodule.js";
 import type * as confect from "../confect.js";
 import type * as http from "../http.js";
-import type * as rpc_admin from "../rpc/admin.js";
 import type * as rpc_benchmark from "../rpc/benchmark.js";
 import type * as rpc_guestbook from "../rpc/guestbook.js";
-import type * as rpc_middleware from "../rpc/middleware.js";
 import type * as shared_betterAuth from "../shared/betterAuth.js";
 import type * as shared_rateLimiter from "../shared/rateLimiter.js";
 
@@ -36,10 +32,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "benchmark/benchmarkEffectNoSchema": typeof benchmark_benchmarkEffectNoSchema;
-  "benchmark/benchmarkEffectRpc": typeof benchmark_benchmarkEffectRpc;
   "benchmark/benchmarkEffectWithSchema": typeof benchmark_benchmarkEffectWithSchema;
   "benchmark/benchmarkMicro": typeof benchmark_benchmarkMicro;
-  "benchmark/benchmarkMicroRpc": typeof benchmark_benchmarkMicroRpc;
   "benchmark/benchmarkMinimal": typeof benchmark_benchmarkMinimal;
   "benchmark/benchmarkMinimalImport": typeof benchmark_benchmarkMinimalImport;
   "benchmark/benchmarkNoEffect": typeof benchmark_benchmarkNoEffect;
@@ -48,10 +42,8 @@ declare const fullApi: ApiFromModules<{
   "benchmark/benchmarkSubmodule": typeof benchmark_benchmarkSubmodule;
   confect: typeof confect;
   http: typeof http;
-  "rpc/admin": typeof rpc_admin;
   "rpc/benchmark": typeof rpc_benchmark;
   "rpc/guestbook": typeof rpc_guestbook;
-  "rpc/middleware": typeof rpc_middleware;
   "shared/betterAuth": typeof shared_betterAuth;
   "shared/rateLimiter": typeof shared_rateLimiter;
 }>;

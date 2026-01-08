@@ -1,4 +1,4 @@
-import { defineSchema, defineTable } from "@packages/confect/server";
+import { defineSchema, defineTable } from "@packages/confect/schema";
 import { Schema } from "effect";
 
 const UserSchema = Schema.Struct({
