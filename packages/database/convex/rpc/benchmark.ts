@@ -1,5 +1,4 @@
 import { createRpcFactory, makeRpcModule } from "@packages/confect/rpc";
-import { createFunctions } from "@packages/confect/functions";
 import {
 	queryGeneric,
 	mutationGeneric,
@@ -12,7 +11,6 @@ import { Effect, Schema } from "effect";
 import { ConfectMutationCtx, ConfectQueryCtx, confectSchema } from "../confect";
 
 const factory = createRpcFactory({ schema: confectSchema });
-const confect = createFunctions(confectSchema);
 
 const Entry = Schema.Struct({
 	name: Schema.String,
@@ -50,38 +48,6 @@ export const rpcModule = makeRpcModule({
 });
 
 export const { list: rpcList, add: rpcAdd } = rpcModule.handlers;
-
-export const confectList = confect.query(
-	{
-		args: Schema.Struct({ nonce: Schema.String }),
-		returns: Schema.Array(Entry),
-	},
-	() =>
-		Effect.gen(function* () {
-			const ctx = yield* ConfectQueryCtx;
-			const entries = yield* ctx.db.query("guestbook").take(100);
-			return entries.map((e) => ({
-				name: e.name,
-				message: e.message,
-			}));
-		}),
-);
-
-export const confectAdd = confect.mutation(
-	{
-		args: Schema.Struct({ name: Schema.String, message: Schema.String }),
-		returns: Schema.String,
-	},
-	(args) =>
-		Effect.gen(function* () {
-			const ctx = yield* ConfectMutationCtx;
-			const id = yield* ctx.db.insert("guestbook", {
-				name: args.name,
-				message: args.message,
-			});
-			return id;
-		}),
-);
 
 export const vanillaList = queryGeneric({
 	args: { nonce: v.string() },

@@ -7,7 +7,6 @@
 		"./schema": "./src/schema.ts",
 		"./validators": "./src/validators.ts",
 		"./ctx": "./src/ctx.ts",
-		"./functions": "./src/functions.ts",
 		"./client": "./src/client.ts",
 		"./rpc": "./src/rpc/index.ts"
 	},
