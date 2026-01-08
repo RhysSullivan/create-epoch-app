@@ -8,15 +8,6 @@
  * @module
  */
 
-import type * as benchmark_benchmarkEffectNoSchema from "../benchmark/benchmarkEffectNoSchema.js";
-import type * as benchmark_benchmarkEffectWithSchema from "../benchmark/benchmarkEffectWithSchema.js";
-import type * as benchmark_benchmarkMicro from "../benchmark/benchmarkMicro.js";
-import type * as benchmark_benchmarkMinimal from "../benchmark/benchmarkMinimal.js";
-import type * as benchmark_benchmarkMinimalImport from "../benchmark/benchmarkMinimalImport.js";
-import type * as benchmark_benchmarkNoEffect from "../benchmark/benchmarkNoEffect.js";
-import type * as benchmark_benchmarkNormal from "../benchmark/benchmarkNormal.js";
-import type * as benchmark_benchmarkOnlyImport from "../benchmark/benchmarkOnlyImport.js";
-import type * as benchmark_benchmarkSubmodule from "../benchmark/benchmarkSubmodule.js";
 import type * as confect from "../confect.js";
 import type * as http from "../http.js";
 import type * as rpc_benchmark from "../rpc/benchmark.js";
@@ -31,15 +22,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "benchmark/benchmarkEffectNoSchema": typeof benchmark_benchmarkEffectNoSchema;
-  "benchmark/benchmarkEffectWithSchema": typeof benchmark_benchmarkEffectWithSchema;
-  "benchmark/benchmarkMicro": typeof benchmark_benchmarkMicro;
-  "benchmark/benchmarkMinimal": typeof benchmark_benchmarkMinimal;
-  "benchmark/benchmarkMinimalImport": typeof benchmark_benchmarkMinimalImport;
-  "benchmark/benchmarkNoEffect": typeof benchmark_benchmarkNoEffect;
-  "benchmark/benchmarkNormal": typeof benchmark_benchmarkNormal;
-  "benchmark/benchmarkOnlyImport": typeof benchmark_benchmarkOnlyImport;
-  "benchmark/benchmarkSubmodule": typeof benchmark_benchmarkSubmodule;
   confect: typeof confect;
   http: typeof http;
   "rpc/benchmark": typeof rpc_benchmark;

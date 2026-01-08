@@ -9,7 +9,12 @@
 		"./validators": "./src/validators.ts",
 		"./ctx": "./src/ctx.ts",
 		"./client": "./src/client.ts",
-		"./rpc": "./src/rpc/index.ts"
+		"./rpc": "./src/rpc/index.ts",
+		"./testing": "./src/testing.ts"
+	},
+	"scripts": {
+		"test": "vitest run --no-watch",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@effect/platform": "catalog:",
@@ -20,7 +25,9 @@
 		"effect": "catalog:"
 	},
 	"devDependencies": {
+		"@effect/vitest": "catalog:",
 		"@types/node": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "catalog:"
 	}
 }
