@@ -47,18 +47,12 @@ type TableSchemas<Tables extends GenericConfectSchema> = {
 	>;
 };
 
-const SystemFieldsSchema = Schema.Struct({
-	_id: Schema.String,
-	_creationTime: Schema.Number,
-});
-
-const buildTableSchemas = <Tables extends GenericConfectSchema>(
+const extractTableSchemas = <Tables extends GenericConfectSchema>(
 	tables: Tables,
 ): TableSchemas<Tables> => {
 	const result: Record<string, Schema.Schema.AnyNoContext> = {};
 	for (const [tableName, tableDef] of Object.entries(tables)) {
-		const userSchema = (tableDef as { tableSchema: Schema.Schema.AnyNoContext }).tableSchema;
-		result[tableName] = Schema.extend(SystemFieldsSchema, userSchema);
+		result[tableName] = (tableDef as { documentSchema: Schema.Schema.AnyNoContext }).documentSchema;
 	}
 	return result as TableSchemas<Tables>;
 };
@@ -186,7 +180,7 @@ export const createRpcFactory = <
 >(
 	config: RpcFactoryConfig<ConfectSchema, BasePayload, Middlewares>,
 ) => {
-	const tableSchemas = buildTableSchemas(config.schema.tables);
+	const tableSchemas = extractTableSchemas(config.schema.tables);
 	const basePayload = config.basePayload ?? ({} as BasePayload);
 	const middlewares = config.middlewares ?? [];
 

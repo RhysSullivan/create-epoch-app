@@ -19,6 +19,11 @@ import { Record, Schema } from "effect";
 
 import { schemaToObjectValidator } from "./validators";
 
+const SystemFieldsSchema = Schema.Struct({
+	_id: Schema.String,
+	_creationTime: Schema.Number,
+});
+
 export interface ConfectTableDefinition<
 	TableSchema extends Schema.Schema.AnyNoContext,
 	TableValidator extends Validator<unknown, "required" | "optional", string> = Validator<
@@ -37,6 +42,7 @@ export interface ConfectTableDefinition<
 		VectorIndexes
 	>;
 	tableSchema: TableSchema;
+	documentSchema: Schema.Schema.AnyNoContext;
 
 	index<
 		IndexName extends string,
@@ -125,6 +131,7 @@ class ConfectTableDefinitionImpl<
 		>
 {
 	tableSchema: TableSchema;
+	documentSchema: Schema.Schema.AnyNoContext;
 	tableDefinition: TableDefinition<
 		TableValidator,
 		Indexes,
@@ -134,6 +141,7 @@ class ConfectTableDefinitionImpl<
 
 	constructor(tableSchema: TableSchema) {
 		this.tableSchema = tableSchema;
+		this.documentSchema = Schema.extend(SystemFieldsSchema, tableSchema) as unknown as Schema.Schema.AnyNoContext;
 		const tableValidator = schemaToObjectValidator(tableSchema);
 		this.tableDefinition = defineConvexTable(
 			tableValidator,
