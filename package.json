@@ -28,6 +28,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.1.4",
 		"@typescript/native-preview": "^7.0.0-dev.20260102.1",
+		"convex": "^1.31.3",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.2.6",
 		"turbo": "^2.6.1",
@@ -79,7 +80,6 @@
 		"effect": "^3.19.8",
 		"@effect/platform": "^0.93.6"
 	},
-
 	"lint-staged": {
 		"*": [
 			"biome format --write"

@@ -1,16 +1,17 @@
 export {
 	createRpcFactory,
 	makeRpcModule,
-	type RpcFactory,
+	RpcMiddleware,
 	type RpcModule,
-	type RpcDefinitions,
-	type RpcQueryDefinition,
-	type RpcMutationDefinition,
-	type RpcDefinition,
-	type RpcResultEncoded,
-	type InferRpcPayload,
-	type InferRpcSuccess,
-	type InferRpcError,
+	type AnyRpcModule,
+	type RpcEndpoint,
+	type UnbuiltRpcEndpoint,
+	type MiddlewareEntry,
+	type RpcFactoryConfig,
+	type InferRpc,
+	type InferFn,
+	type InferModuleEndpoints,
+	type ExitEncoded,
 } from "./server";
 
 export {
@@ -20,5 +21,6 @@ export {
 	type RpcModuleClientConfig,
 	type RpcQueryClient,
 	type RpcMutationClient,
+	type RpcActionClient,
 	type RpcModuleClientMethods,
 } from "./client";

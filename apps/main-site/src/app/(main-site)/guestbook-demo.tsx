@@ -7,7 +7,7 @@ import { Input } from "@packages/ui/components/input";
 import { guestbookClient } from "@packages/ui/rpc/guestbook";
 import { useState } from "react";
 
-const entriesAtom = guestbookClient.list.subscription(undefined);
+const entriesAtom = guestbookClient.list.subscription({});
 
 export function GuestbookDemo() {
 	const entriesResult = useAtomValue(entriesAtom);

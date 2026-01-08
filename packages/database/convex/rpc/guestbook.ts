@@ -11,7 +11,7 @@ const Entry = Schema.Struct({
 	message: Schema.String,
 });
 
-const guestbookModule = makeRpcModule(confectSchema, {
+const guestbookModule = makeRpcModule({
 	list: factory.query({ success: Schema.Array(Entry) }, () =>
 		Effect.gen(function* () {
 			const ctx = yield* ConfectQueryCtx;
@@ -27,10 +27,10 @@ const guestbookModule = makeRpcModule(confectSchema, {
 
 	add: factory.mutation(
 		{
-			payload: Schema.Struct({
+			payload: {
 				name: Schema.String,
 				message: Schema.String,
-			}),
+			},
 			success: Schema.String,
 		},
 		(args) =>

@@ -13,6 +13,7 @@
 	},
 	"dependencies": {
 		"@effect/platform": "catalog:",
+		"@effect/rpc": "catalog:",
 		"@effect-atom/atom": "catalog:",
 		"@effect-atom/atom-react": "catalog:",
 		"convex": "catalog:",

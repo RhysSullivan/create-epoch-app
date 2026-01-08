@@ -19,20 +19,22 @@ const Entry = Schema.Struct({
 	message: Schema.String,
 });
 
-export const rpcModule = makeRpcModule(confectSchema, {
-	list: factory.query({ success: Schema.Array(Entry) }, () =>
-		Effect.gen(function* () {
-			const ctx = yield* ConfectQueryCtx;
-			const entries = yield* ctx.db.query("guestbook").take(100);
-			return entries.map((e) => ({
-				name: e.name,
-				message: e.message,
-			}));
-		}),
+export const rpcModule = makeRpcModule({
+	list: factory.query(
+		{ payload: { nonce: Schema.String }, success: Schema.Array(Entry) },
+		() =>
+			Effect.gen(function* () {
+				const ctx = yield* ConfectQueryCtx;
+				const entries = yield* ctx.db.query("guestbook").take(100);
+				return entries.map((e) => ({
+					name: e.name,
+					message: e.message,
+				}));
+			}),
 	),
 	add: factory.mutation(
 		{
-			payload: Schema.Struct({ name: Schema.String, message: Schema.String }),
+			payload: { name: Schema.String, message: Schema.String },
 			success: Schema.String,
 		},
 		(args) =>
@@ -49,15 +51,20 @@ export const rpcModule = makeRpcModule(confectSchema, {
 
 export const { list: rpcList, add: rpcAdd } = rpcModule.handlers;
 
-export const confectList = confect.query({ returns: Schema.Array(Entry) }, () =>
-	Effect.gen(function* () {
-		const ctx = yield* ConfectQueryCtx;
-		const entries = yield* ctx.db.query("guestbook").take(100);
-		return entries.map((e) => ({
-			name: e.name,
-			message: e.message,
-		}));
-	}),
+export const confectList = confect.query(
+	{
+		args: Schema.Struct({ nonce: Schema.String }),
+		returns: Schema.Array(Entry),
+	},
+	() =>
+		Effect.gen(function* () {
+			const ctx = yield* ConfectQueryCtx;
+			const entries = yield* ctx.db.query("guestbook").take(100);
+			return entries.map((e) => ({
+				name: e.name,
+				message: e.message,
+			}));
+		}),
 );
 
 export const confectAdd = confect.mutation(
@@ -77,7 +84,7 @@ export const confectAdd = confect.mutation(
 );
 
 export const vanillaList = queryGeneric({
-	args: {},
+	args: { nonce: v.string() },
 	returns: v.array(
 		v.object({
 			name: v.string(),
