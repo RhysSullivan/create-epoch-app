@@ -11,13 +11,18 @@ const Entry = Schema.Struct({
 	message: Schema.String,
 });
 
+class EmptyFieldError extends Schema.TaggedError<EmptyFieldError>()(
+	"EmptyFieldError",
+	{ field: Schema.String },
+) {}
+
 const guestbookModule = makeRpcModule({
 	list: factory.query({ success: Schema.Array(Entry) }, () =>
 		Effect.gen(function* () {
 			const ctx = yield* ConfectQueryCtx;
-			const entries = yield* ctx.db.query("guestbook").collect();
+			const entries = yield* ctx.db.query("guestbook").order("desc").take(50);
 			return entries.map((e) => ({
-				_id: e._id,
+				_id: String(e._id),
 				_creationTime: e._creationTime,
 				name: e.name,
 				message: e.message,
@@ -32,19 +37,27 @@ const guestbookModule = makeRpcModule({
 				message: Schema.String,
 			},
 			success: Schema.String,
+			error: EmptyFieldError,
 		},
 		(args) =>
 			Effect.gen(function* () {
+				const name = args.name.trim();
+				const message = args.message.trim();
+
+				if (name.length === 0) {
+					return yield* new EmptyFieldError({ field: "name" });
+				}
+				if (message.length === 0) {
+					return yield* new EmptyFieldError({ field: "message" });
+				}
+
 				const ctx = yield* ConfectMutationCtx;
-				const id = yield* ctx.db.insert("guestbook", {
-					name: args.name,
-					message: args.message,
-				});
-				return id;
+				const id = yield* ctx.db.insert("guestbook", { name, message });
+				return String(id);
 			}),
 	),
 });
 
 export const { list, add } = guestbookModule.handlers;
-export { guestbookModule };
+export { guestbookModule, EmptyFieldError };
 export type GuestbookModule = typeof guestbookModule;

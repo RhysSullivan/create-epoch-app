@@ -1,7 +1,7 @@
 import type { Rpc } from "@effect/rpc";
 import type { FunctionReference, RegisteredQuery, RegisteredMutation, RegisteredAction } from "convex/server";
 import { Atom, Result } from "@effect-atom/atom";
-import { Cause, Chunk, Effect, Exit, Option, Stream } from "effect";
+import { Cause, Chunk, Effect, Exit, Option, pipe, Stream } from "effect";
 
 import { ConvexClient, ConvexClientLayer } from "../client";
 import type { RpcEndpoint, AnyRpcModule, ExitEncoded } from "./server";

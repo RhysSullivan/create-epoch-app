@@ -48,7 +48,7 @@ export function GuestbookDemo() {
 				</Button>
 			</form>
 
-			{Result.isInitial(entriesResult) || Result.isWaiting(entriesResult) ? (
+			{Result.isInitial(entriesResult) ? (
 				<p className="text-muted-foreground text-sm">Loading...</p>
 			) : Result.isFailure(entriesResult) ? (
 				<p className="text-sm text-red-500">Error loading entries</p>

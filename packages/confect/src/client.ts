@@ -57,11 +57,13 @@ export const ConvexClientLayer = (
 			query: Query,
 			args: Query["_args"],
 		): Stream.Stream<FunctionReturnType<Query>> =>
-			Stream.async((emit) => {
+			Stream.async<FunctionReturnType<Query>>((emit) => {
 				const unsubscribe = client.onUpdate(query, args, (result) => {
 					emit.single(result);
 				});
-				return Effect.sync(() => unsubscribe());
+				return Effect.sync(() => {
+					unsubscribe();
+				});
 			}),
 	};
 

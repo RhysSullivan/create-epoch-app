@@ -39,12 +39,17 @@ type TableSchemas<Tables extends GenericConfectSchema> = {
 	>;
 };
 
+const SystemFieldsSchema = Schema.Struct({
+	_id: Schema.String,
+	_creationTime: Schema.Number,
+});
+
 const buildTableSchemas = <Tables extends GenericConfectSchema>(
 	tables: Tables,
 ): TableSchemas<Tables> => {
 	const result: Record<string, Schema.Schema.AnyNoContext> = {};
 	for (const [tableName, tableDef] of Object.entries(tables)) {
-		result[tableName] = tableDef.tableSchema;
+		result[tableName] = Schema.extend(SystemFieldsSchema, tableDef.tableSchema);
 	}
 	return result as TableSchemas<Tables>;
 };
