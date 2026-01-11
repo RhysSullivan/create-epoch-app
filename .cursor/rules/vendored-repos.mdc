@@ -2,109 +2,56 @@
 alwaysApply: false
 ---
 
-We vendor the `Effect` repository as a git subtree under `.context/effect/`.
+# Vendored Context Repositories
 
-- **Patterns and APIs**: Look in `.context/effect/` for canonical patterns, implementations, and best practices to follow when building agents and related workflows.
-- **Updating the subtree**:
-  - `git fetch effect-upstream`
-  - `git subtree pull --prefix=.context/effect effect-upstream main --squash`
+Reference repositories are available under `.context/` for understanding patterns and implementations.
 
-## AnswerOverflow Production Codebase
+## Effect
 
-We also include the AnswerOverflow production codebase as a git submodule under `.context/AnswerOverflow/`.
+The Effect repository is available at `.context/effect/`.
 
-- **Context**: This is the current production codebase that we're rewriting. Use it as a reference for understanding existing functionality, business logic, and patterns that need to be preserved or improved in the rewrite.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/AnswerOverflow`
-  - Or navigate to `.context/AnswerOverflow` and pull changes: `cd .context/AnswerOverflow && git pull`
-
-When I say 'the old answer overflow' i am referring to this codebase
+- **Use for**: Canonical patterns, APIs, and best practices for Effect-based code
+- **Updating**: `git subtree pull --prefix=.context/effect effect-upstream main --squash`
 
 ## Better Auth
 
-We include the Better Auth repository as a git submodule under `.context/better-auth/`.
+The Better Auth repository is available at `.context/better-auth/`.
 
-- **Context**: This is the Better Auth library for Convex. Use it as a reference for authentication patterns, implementations, and best practices when working with authentication in Convex.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/better-auth`
-  - Or navigate to `.context/better-auth` and pull changes: `cd .context/better-auth && git pull`
+- **Use for**: Authentication patterns and implementations for Convex
 
 ## Convex Backend
 
-We include the Convex backend repository as a git submodule under `.context/convex-backend/`.
+The Convex backend repository is available at `.context/convex-backend/`.
 
-- **Context**: This is the official Convex backend implementation. Use it as a reference for understanding Convex internals, backend patterns, and implementation details.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/convex-backend`
-  - Or navigate to `.context/convex-backend` and pull changes: `cd .context/convex-backend && git pull`
+- **Use for**: Understanding Convex internals and backend patterns
 
 ## Convex JS
 
-We include the Convex JS client library repository as a git submodule under `.context/convex-js/`.
+The Convex JS client library is available at `.context/convex-js/`.
 
-- **Context**: This is the official Convex JavaScript/TypeScript client library. Use it as a reference for understanding client-side Convex patterns, API usage, and implementation details.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/convex-js`
-  - Or navigate to `.context/convex-js` and pull changes: `cd .context/convex-js && git pull`
+- **Use for**: Client-side Convex patterns and API usage
 
 ## Effect Atom
 
-We include the Effect Atom repository as a git submodule under `.context/effect-atom/`.
+The Effect Atom repository is available at `.context/effect-atom/`.
 
-- **Context**: This is the reactive state management library for Effect. Use it for state management in React components that need to run Effects with service dependencies.
+- **Use for**: Reactive state management with Effect in React components
 - **Key patterns**:
-  - `Atom.runtime(Layer)` - Create a runtime with service layer for atoms that need service access
+  - `Atom.runtime(Layer)` - Create a runtime with service layer
   - `Atom.family((param) => atom)` - Create parameterized atoms
-  - `runtime.atom(Effect)` - Create an atom that runs an Effect with the runtime's services
+  - `runtime.atom(Effect)` - Create an atom that runs an Effect
   - `runtime.fn<Input>()(fn)` - Create a function atom for triggering Effects
   - `useAtomValue(atom)` - Read atom value in React
   - `useAtomSet(atom)` - Get setter for writable/function atoms
-  - `Result.isInitial/isSuccess/isFailure` - Check atom result state
-- **Updating the submodule**:
-  - `git submodule update --remote .context/effect-atom`
-  - Or navigate to `.context/effect-atom` and pull changes: `cd .context/effect-atom && git pull`
 
 ## Vercel AI SDK
 
-We include the Vercel AI SDK repository as a git submodule under `.context/vercel-ai/`.
+The Vercel AI SDK is available at `.context/vercel-ai/`.
 
-- **Context**: This is the official Vercel AI SDK for building AI-powered applications. Use it as a reference for AI integration patterns, streaming responses, tool calling, and best practices when working with LLMs.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/vercel-ai`
-  - Or navigate to `.context/vercel-ai` and pull changes: `cd .context/vercel-ai && git pull`
+- **Use for**: AI integration patterns, streaming responses, and tool calling
 
 ## AI Elements
 
-We include the Vercel AI Elements repository as a git submodule under `.context/ai-elements/`.
+The AI Elements library is available at `.context/ai-elements/`.
 
-- **Context**: This is the Vercel AI Elements library providing React components for AI chat interfaces. Use it as a reference for building chat UIs, message rendering, and AI interaction patterns.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/ai-elements`
-  - Or navigate to `.context/ai-elements` and pull changes: `cd .context/ai-elements && git pull`
-
-## PostHog
-
-We include the PostHog repository as a git submodule under `.context/posthog/`.
-
-- **Context**: This is the main PostHog product analytics platform. Use it as a reference for analytics patterns, event tracking, feature flags, session recording, and self-hosted analytics implementations.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/posthog`
-  - Or navigate to `.context/posthog` and pull changes: `cd .context/posthog && git pull`
-
-## PostHog Website
-
-We include the PostHog website repository as a git submodule under `.context/posthog-com/`.
-
-- **Context**: This is the PostHog marketing website and documentation. Use it as a reference for documentation patterns, marketing site architecture, and content organization.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/posthog-com`
-  - Or navigate to `.context/posthog-com` and pull changes: `cd .context/posthog-com && git pull`
-
-## Typelytics
-
-We include the Typelytics repository as a git submodule under `.context/typelytics/`.
-
-- **Context**: This is a type-safe PostHog client library. Use it as a reference for type-safe analytics patterns, PostHog integration, and building strongly-typed event tracking systems.
-- **Updating the submodule**:
-  - `git submodule update --remote .context/typelytics`
-  - Or navigate to `.context/typelytics` and pull changes: `cd .context/typelytics && git pull`
+- **Use for**: React components for AI chat interfaces
