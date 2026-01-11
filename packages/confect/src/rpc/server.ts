@@ -21,7 +21,7 @@ import { v } from "convex/values";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import type * as Layer from "effect/Layer";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
 import {
@@ -37,6 +37,57 @@ import {
 	type EncodedDocumentFromTable,
 } from "../ctx";
 import type { ConfectSchemaDefinition } from "../schema";
+
+export { Rpc, RpcGroup, RpcMiddleware };
+
+export {
+	WrapperTypeId,
+	type WrapperTypeId as WrapperTypeIdType,
+	type Wrapper,
+	isWrapper,
+	wrap,
+	fork,
+	uninterruptible,
+} from "@effect/rpc/Rpc";
+
+export type Handler<Tag extends string> = Rpc.Handler<Tag>;
+export type ToHandler<R extends Rpc.Any> = Rpc.ToHandler<R>;
+export type HandlersFrom<R extends Rpc.Any> = RpcGroup.HandlersFrom<R>;
+export type HandlersContext<R extends Rpc.Any, Handlers> = RpcGroup.HandlersContext<R, Handlers>;
+
+type ConvexCtx = GenericQueryCtx<GenericDataModel> | GenericMutationCtx<GenericDataModel> | GenericActionCtx<GenericDataModel>;
+
+export interface RpcInfo {
+	readonly tag: string;
+	readonly kind: "query" | "mutation" | "action" | "internalQuery" | "internalMutation" | "internalAction";
+}
+
+export interface MiddlewareOptions {
+	readonly rpc: RpcInfo;
+	readonly payload: unknown;
+	readonly ctx: ConvexCtx;
+}
+
+export interface ConfectMiddlewareFn<Service, E = never> {
+	(options: MiddlewareOptions): Effect.Effect<Service, E>;
+}
+
+export interface MiddlewareImplementation<M extends RpcMiddleware.TagClassAny = RpcMiddleware.TagClassAny> {
+	readonly _tag: "MiddlewareImplementation";
+	readonly middleware: M;
+	readonly impl: ConfectMiddlewareFn<unknown, unknown>;
+}
+
+export const middleware = <M extends RpcMiddleware.TagClassAny>(
+	middlewareTag: M,
+	impl: M extends { readonly provides: Context.Tag<infer _Id, infer S> }
+		? ConfectMiddlewareFn<S, M extends { readonly failure: Schema.Schema<infer E, infer _I, infer _R> } ? E : never>
+		: ConfectMiddlewareFn<void, M extends { readonly failure: Schema.Schema<infer E, infer _I, infer _R> } ? E : never>,
+): MiddlewareImplementation<M> => ({
+	_tag: "MiddlewareImplementation",
+	middleware: middlewareTag,
+	impl: impl as ConfectMiddlewareFn<unknown, unknown>,
+});
 
 type TableSchemas<Tables extends GenericConfectSchema> = {
 	[TableName in TableNamesInSchema<Tables>]: Schema.Schema<
@@ -70,153 +121,115 @@ export interface UnbuiltRpcEndpoint<
 	Success extends Schema.Schema.AnyNoContext,
 	Error extends Schema.Schema.AnyNoContext | undefined,
 	ConvexFnType,
+	Middlewares extends ReadonlyArray<RpcMiddleware.TagClassAny> = [],
 > {
 	readonly __unbuilt: true;
 	readonly kind: string;
 	readonly payloadFields: PayloadFields;
 	readonly successSchema: Success;
 	readonly errorSchema: Error | undefined;
+	readonly middlewares: Middlewares;
 	readonly handler: (
 		payload: Schema.Struct.Type<PayloadFields>,
 	) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>;
-	readonly build: (tag: string) => RpcEndpoint<string, Rpc.Any, ConvexFnType>;
+	readonly build: (tag: string, middlewareConfig: MiddlewareConfig | undefined) => RpcEndpoint<string, Rpc.Any, ConvexFnType>;
+	middleware<M extends RpcMiddleware.TagClassAny>(
+		middleware: M,
+	): UnbuiltRpcEndpoint<PayloadFields, Success, Error, ConvexFnType, [...Middlewares, M]>;
 }
-
-type MiddlewareProvides<T extends RpcMiddleware.TagClassAny> = T extends {
-	readonly provides: Context.Tag<infer Id, infer _S>;
-}
-	? Id
-	: never;
-
-type MiddlewareFailure<T extends RpcMiddleware.TagClassAny> = T extends {
-	readonly failure: Schema.Schema<infer A, infer _I, infer _R>;
-}
-	? A
-	: never;
-
-export interface MiddlewareEntry<T extends RpcMiddleware.TagClassAny = RpcMiddleware.TagClassAny> {
-	readonly tag: T;
-	readonly impl: Context.Tag.Service<T>;
-}
-
-type MiddlewaresProvides<T extends ReadonlyArray<MiddlewareEntry>> = T[number] extends MiddlewareEntry<infer M>
-	? MiddlewareProvides<M>
-	: never;
-
-type MiddlewaresFailure<T extends ReadonlyArray<MiddlewareEntry>> = T[number] extends MiddlewareEntry<infer M>
-	? MiddlewareFailure<M>
-	: never;
 
 export interface RpcFactoryConfig<
 	ConfectSchema extends GenericConfectSchema,
 	BasePayload extends Schema.Struct.Fields = {},
-	Middlewares extends ReadonlyArray<MiddlewareEntry> = [],
+	BaseMiddlewares extends ReadonlyArray<RpcMiddleware.TagClassAny> = [],
 > {
 	readonly schema: ConfectSchemaDefinition<ConfectSchema>;
 	readonly basePayload?: BasePayload;
-	readonly middlewares?: Middlewares;
+	readonly baseMiddlewares?: BaseMiddlewares;
 }
 
 export type ExitEncoded<A = unknown, E = unknown, D = unknown> = Schema.ExitEncoded<A, E, D>;
 
-const applyMiddleware = <A, E, R, Middlewares extends ReadonlyArray<MiddlewareEntry>>(
-	effect: Effect.Effect<A, E, R>,
-	payload: unknown,
-	middlewares: Middlewares,
-): Effect.Effect<A, E | MiddlewaresFailure<Middlewares>, Exclude<R, MiddlewaresProvides<Middlewares>>> => {
-	if (middlewares.length === 0) {
-		return effect as Effect.Effect<A, E | MiddlewaresFailure<Middlewares>, Exclude<R, MiddlewaresProvides<Middlewares>>>;
-	}
-
-	const options = {
-		clientId: 0,
-		rpc: {} as Rpc.AnyWithProps,
-		payload,
-		headers: {} as import("@effect/platform/Headers").Headers,
-	};
-
-	let result = effect as Effect.Effect<A, E | MiddlewaresFailure<Middlewares>, Exclude<R, MiddlewaresProvides<Middlewares>>>;
-
-	for (const middleware of middlewares) {
-		const middlewareTag = middleware.tag as RpcMiddleware.TagClassAny & {
-			provides?: Context.Tag<unknown, unknown>;
-			optional?: boolean;
-			wrap?: boolean;
-		};
-		const impl = middleware.impl as RpcMiddleware.RpcMiddleware<unknown, unknown>;
-
-		if (middlewareTag.wrap) {
-			const wrapImpl = impl as unknown as RpcMiddleware.RpcMiddlewareWrap<unknown, unknown>;
-			result = wrapImpl({ ...options, next: result as unknown as Effect.Effect<RpcMiddleware.SuccessValue, unknown, unknown> }) as unknown as typeof result;
-		} else if (middlewareTag.optional) {
-			const previous = result;
-			result = Effect.matchEffect(impl(options), {
-				onFailure: () => previous,
-				onSuccess: middlewareTag.provides !== undefined
-					? (value) => Effect.provideService(previous, middlewareTag.provides as Context.Tag<unknown, unknown>, value)
-					: (_) => previous,
-			}) as typeof result;
-		} else if (middlewareTag.provides !== undefined) {
-			result = Effect.provideServiceEffect(
-				result,
-				middlewareTag.provides,
-				impl(options),
-			) as typeof result;
-		} else {
-			result = Effect.zipRight(
-				impl(options),
-				result,
-			) as typeof result;
-		}
-	}
-
-	return result;
+type MiddlewareConfig = {
+	readonly implementations: ReadonlyArray<MiddlewareImplementation>;
+	readonly staticLayer?: Layer.Layer<unknown, unknown, never>;
 };
+
+const executeMiddlewares = (
+	middlewareImpls: ReadonlyArray<MiddlewareImplementation>,
+	options: MiddlewareOptions,
+): Effect.Effect<Context.Context<never>, unknown, never> => {
+	if (middlewareImpls.length === 0) {
+		return Effect.succeed(Context.empty());
+	}
+
+	return Effect.gen(function* () {
+		let ctx: Context.Context<never> = Context.empty();
+		
+		for (const middlewareImpl of middlewareImpls) {
+			const result = yield* middlewareImpl.impl(options);
+			const providesTag = middlewareImpl.middleware.provides;
+			if (providesTag) {
+				ctx = Context.add(ctx, providesTag, result) as Context.Context<never>;
+			}
+		}
+		
+		return ctx;
+	});
+};
+
+type EndpointKind = "query" | "mutation" | "action" | "internalQuery" | "internalMutation" | "internalAction";
+
+type ConvexRegistrar = (opts: { args: ReturnType<typeof v.any>; handler: (ctx: ConvexCtx, args: unknown) => Promise<ExitEncoded> }) => unknown;
+
+interface EndpointConfig<Ctx, ConvexFnType> {
+	readonly kind: EndpointKind;
+	readonly ctxTag: Context.Tag<Ctx, Ctx>;
+	readonly makeCtx: (rawCtx: ConvexCtx) => Ctx;
+	readonly registrar: ConvexRegistrar;
+	readonly _convexFnType?: ConvexFnType;
+}
 
 export const createRpcFactory = <
 	ConfectSchema extends GenericConfectSchema,
 	BasePayload extends Schema.Struct.Fields = {},
-	Middlewares extends ReadonlyArray<MiddlewareEntry> = [],
+	BaseMiddlewares extends ReadonlyArray<RpcMiddleware.TagClassAny> = [],
 >(
-	config: RpcFactoryConfig<ConfectSchema, BasePayload, Middlewares>,
+	config: RpcFactoryConfig<ConfectSchema, BasePayload, BaseMiddlewares>,
 ) => {
 	const tableSchemas = extractTableSchemas(config.schema.tables);
 	const basePayload = config.basePayload ?? ({} as BasePayload);
-	const middlewares = config.middlewares ?? ([] as unknown as Middlewares);
-
-	type MWProvides = MiddlewaresProvides<Middlewares>;
-	type MWFailure = MiddlewaresFailure<Middlewares>;
+	const baseMiddlewares = config.baseMiddlewares ?? ([] as unknown as BaseMiddlewares);
 
 	type MergedPayload<P extends Schema.Struct.Fields> = BasePayload & P;
 
-	type AllowedQueryRequirements = ConfectQueryCtx<ConfectSchema> | MWProvides;
-	type AllowedMutationRequirements = ConfectMutationCtx<ConfectSchema> | MWProvides;
-	type AllowedActionRequirements = ConfectActionCtx<ConfectSchema> | MWProvides;
-
-	const makeHandler = <Ctx>(
-		ctxTag: Context.Tag<Ctx, Ctx>,
-		makeCtxFn: (rawCtx: GenericQueryCtx<GenericDataModel> | GenericMutationCtx<GenericDataModel> | GenericActionCtx<GenericDataModel>) => Ctx,
-	) => <
+	const makeHandler = <
 		PayloadFields extends Schema.Struct.Fields,
 		Success extends Schema.Schema.AnyNoContext,
 		Error extends Schema.Schema.AnyNoContext | undefined,
+		Ctx,
 	>(
+		endpointConfig: EndpointConfig<Ctx, unknown>,
+		tag: string,
 		payloadFields: PayloadFields,
 		successSchema: Success,
 		errorSchema: Error,
-		handler: (payload: Schema.Struct.Type<PayloadFields>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, Ctx | MWProvides>,
+		middlewareConfig: MiddlewareConfig | undefined,
+		handler: (payload: Schema.Struct.Type<PayloadFields>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
 	) => {
 		const payloadSchema = Schema.Struct(payloadFields) as unknown as Schema.Schema<Schema.Struct.Type<PayloadFields>, Schema.Struct.Encoded<PayloadFields>, never>;
 		const decodePayload = Schema.decodeUnknownSync(payloadSchema);
 		
-		const exitSchema = Schema.Exit({
+		const exitSchemaVal = Schema.Exit({
 			success: successSchema as Schema.Schema<unknown, unknown, never>,
 			failure: (errorSchema ?? Schema.Never) as Schema.Schema<unknown, unknown, never>,
 			defect: Schema.Defect,
 		});
-		const encodeExit = Schema.encodeSync(exitSchema) as (exit: Exit.Exit<unknown, unknown>) => ExitEncoded;
+		const encodeExit = Schema.encodeSync(exitSchemaVal) as (exit: Exit.Exit<unknown, unknown>) => ExitEncoded;
 
-		return async (rawCtx: GenericQueryCtx<GenericDataModel> | GenericMutationCtx<GenericDataModel> | GenericActionCtx<GenericDataModel>, args: unknown): Promise<ExitEncoded> => {
+		const rpcInfo: RpcInfo = { tag, kind: endpointConfig.kind };
+
+		return async (rawCtx: ConvexCtx, args: unknown): Promise<ExitEncoded> => {
 			let decodedArgs: Schema.Struct.Type<PayloadFields>;
 			try {
 				decodedArgs = decodePayload(args);
@@ -224,274 +237,160 @@ export const createRpcFactory = <
 				return encodeExit(Exit.die(err));
 			}
 
-			const handlerEffect = handler(decodedArgs);
-			const withMiddleware = applyMiddleware(handlerEffect, decodedArgs, middlewares);
-			const effect = Effect.provideService(
-				withMiddleware as Effect.Effect<Schema.Schema.Type<Success>, unknown, Ctx>,
-				ctxTag,
-				makeCtxFn(rawCtx),
-			);
+			const middlewareOptions: MiddlewareOptions = {
+				rpc: rpcInfo,
+				payload: decodedArgs,
+				ctx: rawCtx,
+			};
+
+			const effect = Effect.gen(function* () {
+				const middlewareCtx = middlewareConfig?.implementations?.length
+					? yield* executeMiddlewares(middlewareConfig.implementations, middlewareOptions)
+					: Context.empty();
+
+				const handlerEffect = handler(decodedArgs);
+				const withMiddlewareCtx = Effect.provide(handlerEffect, middlewareCtx);
+				const withStaticLayer = middlewareConfig?.staticLayer
+					? Effect.provide(withMiddlewareCtx, middlewareConfig.staticLayer)
+					: withMiddlewareCtx;
+				const withConfectCtx = Effect.provideService(
+					withStaticLayer as Effect.Effect<Schema.Schema.Type<Success>, unknown, Ctx>,
+					endpointConfig.ctxTag,
+					endpointConfig.makeCtx(rawCtx),
+				);
+
+				return yield* withConfectCtx;
+			});
 
 			const exit = await Effect.runPromiseExit(effect);
 			return encodeExit(exit);
 		};
 	};
 
-	const queryHandler = makeHandler(
-		ConfectQueryCtx<ConfectSchema>(),
-		(ctx) => makeQueryCtx(ctx as GenericQueryCtx<GenericDataModel>, tableSchemas),
-	);
+	const createUnbuiltEndpoint = <
+		PayloadFields extends Schema.Struct.Fields,
+		Success extends Schema.Schema.AnyNoContext,
+		Error extends Schema.Schema.AnyNoContext | undefined,
+		ConvexFnType,
+		Middlewares extends ReadonlyArray<RpcMiddleware.TagClassAny>,
+		Ctx,
+	>(
+		endpointConfig: EndpointConfig<Ctx, ConvexFnType>,
+		mergedPayload: PayloadFields,
+		successSchema: Success,
+		errorSchema: Error | undefined,
+		middlewares: Middlewares,
+		handler: (payload: Schema.Struct.Type<PayloadFields>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
+	): UnbuiltRpcEndpoint<PayloadFields, Success, Error, ConvexFnType, Middlewares> => ({
+		__unbuilt: true as const,
+		kind: endpointConfig.kind,
+		payloadFields: mergedPayload,
+		successSchema: successSchema,
+		errorSchema: errorSchema,
+		middlewares,
+		handler,
+		build: (tag, middlewareConfig): RpcEndpoint<string, Rpc.Any, ConvexFnType> => {
+			const rpc = Rpc.make(tag, {
+				payload: mergedPayload,
+				success: successSchema,
+				error: errorSchema,
+			});
+			const handlerFn = makeHandler(endpointConfig, tag, mergedPayload, successSchema, errorSchema, middlewareConfig, handler);
+			const fn = endpointConfig.registrar({ args: v.any(), handler: handlerFn });
+			return { _tag: tag, rpc, fn: fn as ConvexFnType };
+		},
+		middleware<M extends RpcMiddleware.TagClassAny>(
+			middlewareTag: M,
+		): UnbuiltRpcEndpoint<PayloadFields, Success, Error, ConvexFnType, [...Middlewares, M]> {
+			const newMiddlewares = [...middlewares, middlewareTag] as [...Middlewares, M];
+			return createUnbuiltEndpoint(
+				endpointConfig,
+				mergedPayload,
+				successSchema,
+				errorSchema,
+				newMiddlewares,
+				handler,
+			);
+		},
+	});
 
-	const mutationHandler = makeHandler(
-		ConfectMutationCtx<ConfectSchema>(),
-		(ctx) => makeMutationCtx(ctx as GenericMutationCtx<GenericDataModel>, tableSchemas),
-	);
+	const createEndpointMethod = <Ctx, ConvexFnType>(
+		endpointConfig: EndpointConfig<Ctx, ConvexFnType>,
+	) => <
+		PayloadFields extends Schema.Struct.Fields = {},
+		Success extends Schema.Schema.AnyNoContext = typeof Schema.Void,
+		Error extends Schema.Schema.AnyNoContext | undefined = undefined,
+		R = never,
+	>(
+		options: {
+			readonly payload?: PayloadFields;
+			readonly success: Success;
+			readonly error?: Error;
+		},
+		handler: (
+			payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
+		) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, Ctx | R>,
+	): UnbuiltRpcEndpoint<MergedPayload<PayloadFields>, Success, Error, ConvexFnType, BaseMiddlewares> => {
+		const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
+		return createUnbuiltEndpoint(
+			endpointConfig,
+			mergedPayload,
+			options.success,
+			options.error,
+			baseMiddlewares as unknown as BaseMiddlewares,
+			handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
+		);
+	};
 
-	const actionHandler = makeHandler(
-		ConfectActionCtx<ConfectSchema>(),
-		(ctx) => makeActionCtx(ctx as GenericActionCtx<GenericDataModel>),
-	);
+	const queryConfig: EndpointConfig<ConfectQueryCtx<ConfectSchema>, RegisteredQuery<"public", DefaultFunctionArgs, Promise<ExitEncoded>>> = {
+		kind: "query",
+		ctxTag: ConfectQueryCtx<ConfectSchema>(),
+		makeCtx: (ctx) => makeQueryCtx(ctx as GenericQueryCtx<GenericDataModel>, tableSchemas),
+		registrar: queryGeneric,
+	};
+
+	const mutationConfig: EndpointConfig<ConfectMutationCtx<ConfectSchema>, RegisteredMutation<"public", DefaultFunctionArgs, Promise<ExitEncoded>>> = {
+		kind: "mutation",
+		ctxTag: ConfectMutationCtx<ConfectSchema>(),
+		makeCtx: (ctx) => makeMutationCtx(ctx as GenericMutationCtx<GenericDataModel>, tableSchemas),
+		registrar: mutationGeneric,
+	};
+
+	const actionConfig: EndpointConfig<ConfectActionCtx<ConfectSchema>, RegisteredAction<"public", DefaultFunctionArgs, Promise<ExitEncoded>>> = {
+		kind: "action",
+		ctxTag: ConfectActionCtx<ConfectSchema>(),
+		makeCtx: (ctx) => makeActionCtx(ctx as GenericActionCtx<GenericDataModel>),
+		registrar: actionGeneric,
+	};
+
+	const internalQueryConfig: EndpointConfig<ConfectQueryCtx<ConfectSchema>, RegisteredQuery<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>> = {
+		kind: "internalQuery",
+		ctxTag: ConfectQueryCtx<ConfectSchema>(),
+		makeCtx: (ctx) => makeQueryCtx(ctx as GenericQueryCtx<GenericDataModel>, tableSchemas),
+		registrar: internalQueryGeneric,
+	};
+
+	const internalMutationConfig: EndpointConfig<ConfectMutationCtx<ConfectSchema>, RegisteredMutation<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>> = {
+		kind: "internalMutation",
+		ctxTag: ConfectMutationCtx<ConfectSchema>(),
+		makeCtx: (ctx) => makeMutationCtx(ctx as GenericMutationCtx<GenericDataModel>, tableSchemas),
+		registrar: internalMutationGeneric,
+	};
+
+	const internalActionConfig: EndpointConfig<ConfectActionCtx<ConfectSchema>, RegisteredAction<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>> = {
+		kind: "internalAction",
+		ctxTag: ConfectActionCtx<ConfectSchema>(),
+		makeCtx: (ctx) => makeActionCtx(ctx as GenericActionCtx<GenericDataModel>),
+		registrar: internalActionGeneric,
+	};
 
 	return {
-		query: <
-			PayloadFields extends Schema.Struct.Fields = {},
-			Success extends Schema.Schema.AnyNoContext = typeof Schema.Void,
-			Error extends Schema.Schema.AnyNoContext | undefined = undefined,
-		>(
-			options: {
-				readonly payload?: PayloadFields;
-				readonly success: Success;
-				readonly error?: Error;
-			},
-			handler: (
-				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, AllowedQueryRequirements>,
-		): UnbuiltRpcEndpoint<
-			MergedPayload<PayloadFields>,
-			Success,
-			Error,
-			RegisteredQuery<"public", DefaultFunctionArgs, Promise<ExitEncoded>>
-		> => {
-			const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
-			return {
-				__unbuilt: true as const,
-				kind: "query" as const,
-				payloadFields: mergedPayload,
-				successSchema: options.success,
-				errorSchema: options.error,
-				handler: handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
-				build: (tag: string): RpcEndpoint<string, Rpc.Any, RegisteredQuery<"public", DefaultFunctionArgs, Promise<ExitEncoded>>> => {
-					const rpc = Rpc.make(tag, {
-						payload: mergedPayload,
-						success: options.success,
-						error: options.error,
-					});
-					const handlerFn = queryHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectQueryCtx<ConfectSchema> | MWProvides>);
-					const fn = queryGeneric({ args: v.any(), handler: handlerFn });
-					return { _tag: tag, rpc, fn };
-				},
-			};
-		},
-
-		mutation: <
-			PayloadFields extends Schema.Struct.Fields = {},
-			Success extends Schema.Schema.AnyNoContext = typeof Schema.Void,
-			Error extends Schema.Schema.AnyNoContext | undefined = undefined,
-		>(
-			options: {
-				readonly payload?: PayloadFields;
-				readonly success: Success;
-				readonly error?: Error;
-			},
-			handler: (
-				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, AllowedMutationRequirements>,
-		): UnbuiltRpcEndpoint<
-			MergedPayload<PayloadFields>,
-			Success,
-			Error,
-			RegisteredMutation<"public", DefaultFunctionArgs, Promise<ExitEncoded>>
-		> => {
-			const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
-			return {
-				__unbuilt: true as const,
-				kind: "mutation" as const,
-				payloadFields: mergedPayload,
-				successSchema: options.success,
-				errorSchema: options.error,
-				handler: handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
-				build: (tag: string): RpcEndpoint<string, Rpc.Any, RegisteredMutation<"public", DefaultFunctionArgs, Promise<ExitEncoded>>> => {
-					const rpc = Rpc.make(tag, {
-						payload: mergedPayload,
-						success: options.success,
-						error: options.error,
-					});
-					const handlerFn = mutationHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectMutationCtx<ConfectSchema> | MWProvides>);
-					const fn = mutationGeneric({ args: v.any(), handler: handlerFn });
-					return { _tag: tag, rpc, fn };
-				},
-			};
-		},
-
-		action: <
-			PayloadFields extends Schema.Struct.Fields = {},
-			Success extends Schema.Schema.AnyNoContext = typeof Schema.Void,
-			Error extends Schema.Schema.AnyNoContext | undefined = undefined,
-		>(
-			options: {
-				readonly payload?: PayloadFields;
-				readonly success: Success;
-				readonly error?: Error;
-			},
-			handler: (
-				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, AllowedActionRequirements>,
-		): UnbuiltRpcEndpoint<
-			MergedPayload<PayloadFields>,
-			Success,
-			Error,
-			RegisteredAction<"public", DefaultFunctionArgs, Promise<ExitEncoded>>
-		> => {
-			const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
-			return {
-				__unbuilt: true as const,
-				kind: "action" as const,
-				payloadFields: mergedPayload,
-				successSchema: options.success,
-				errorSchema: options.error,
-				handler: handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
-				build: (tag: string): RpcEndpoint<string, Rpc.Any, RegisteredAction<"public", DefaultFunctionArgs, Promise<ExitEncoded>>> => {
-					const rpc = Rpc.make(tag, {
-						payload: mergedPayload,
-						success: options.success,
-						error: options.error,
-					});
-					const handlerFn = actionHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectActionCtx<ConfectSchema> | MWProvides>);
-					const fn = actionGeneric({ args: v.any(), handler: handlerFn });
-					return { _tag: tag, rpc, fn };
-				},
-			};
-		},
-
-		internalQuery: <
-			PayloadFields extends Schema.Struct.Fields = {},
-			Success extends Schema.Schema.AnyNoContext = typeof Schema.Void,
-			Error extends Schema.Schema.AnyNoContext | undefined = undefined,
-		>(
-			options: {
-				readonly payload?: PayloadFields;
-				readonly success: Success;
-				readonly error?: Error;
-			},
-			handler: (
-				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, AllowedQueryRequirements>,
-		): UnbuiltRpcEndpoint<
-			MergedPayload<PayloadFields>,
-			Success,
-			Error,
-			RegisteredQuery<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>
-		> => {
-			const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
-			return {
-				__unbuilt: true as const,
-				kind: "internalQuery" as const,
-				payloadFields: mergedPayload,
-				successSchema: options.success,
-				errorSchema: options.error,
-				handler: handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
-				build: (tag: string): RpcEndpoint<string, Rpc.Any, RegisteredQuery<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>> => {
-					const rpc = Rpc.make(tag, {
-						payload: mergedPayload,
-						success: options.success,
-						error: options.error,
-					});
-					const handlerFn = queryHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectQueryCtx<ConfectSchema> | MWProvides>);
-					const fn = internalQueryGeneric({ args: v.any(), handler: handlerFn });
-					return { _tag: tag, rpc, fn };
-				},
-			};
-		},
-
-		internalMutation: <
-			PayloadFields extends Schema.Struct.Fields = {},
-			Success extends Schema.Schema.AnyNoContext = typeof Schema.Void,
-			Error extends Schema.Schema.AnyNoContext | undefined = undefined,
-		>(
-			options: {
-				readonly payload?: PayloadFields;
-				readonly success: Success;
-				readonly error?: Error;
-			},
-			handler: (
-				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, AllowedMutationRequirements>,
-		): UnbuiltRpcEndpoint<
-			MergedPayload<PayloadFields>,
-			Success,
-			Error,
-			RegisteredMutation<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>
-		> => {
-			const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
-			return {
-				__unbuilt: true as const,
-				kind: "internalMutation" as const,
-				payloadFields: mergedPayload,
-				successSchema: options.success,
-				errorSchema: options.error,
-				handler: handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
-				build: (tag: string): RpcEndpoint<string, Rpc.Any, RegisteredMutation<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>> => {
-					const rpc = Rpc.make(tag, {
-						payload: mergedPayload,
-						success: options.success,
-						error: options.error,
-					});
-					const handlerFn = mutationHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectMutationCtx<ConfectSchema> | MWProvides>);
-					const fn = internalMutationGeneric({ args: v.any(), handler: handlerFn });
-					return { _tag: tag, rpc, fn };
-				},
-			};
-		},
-
-		internalAction: <
-			PayloadFields extends Schema.Struct.Fields = {},
-			Success extends Schema.Schema.AnyNoContext = typeof Schema.Void,
-			Error extends Schema.Schema.AnyNoContext | undefined = undefined,
-		>(
-			options: {
-				readonly payload?: PayloadFields;
-				readonly success: Success;
-				readonly error?: Error;
-			},
-			handler: (
-				payload: Schema.Struct.Type<MergedPayload<PayloadFields>>,
-			) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, AllowedActionRequirements>,
-		): UnbuiltRpcEndpoint<
-			MergedPayload<PayloadFields>,
-			Success,
-			Error,
-			RegisteredAction<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>
-		> => {
-			const mergedPayload = { ...basePayload, ...options.payload } as MergedPayload<PayloadFields>;
-			return {
-				__unbuilt: true as const,
-				kind: "internalAction" as const,
-				payloadFields: mergedPayload,
-				successSchema: options.success,
-				errorSchema: options.error,
-				handler: handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, unknown>,
-				build: (tag: string): RpcEndpoint<string, Rpc.Any, RegisteredAction<"internal", DefaultFunctionArgs, Promise<ExitEncoded>>> => {
-					const rpc = Rpc.make(tag, {
-						payload: mergedPayload,
-						success: options.success,
-						error: options.error,
-					});
-					const handlerFn = actionHandler(mergedPayload, options.success, options.error, handler as (payload: Schema.Struct.Type<MergedPayload<PayloadFields>>) => Effect.Effect<Schema.Schema.Type<Success>, Error extends Schema.Schema.AnyNoContext ? Schema.Schema.Type<Error> : never, ConfectActionCtx<ConfectSchema> | MWProvides>);
-					const fn = internalActionGeneric({ args: v.any(), handler: handlerFn });
-					return { _tag: tag, rpc, fn };
-				},
-			};
-		},
+		query: createEndpointMethod(queryConfig),
+		mutation: createEndpointMethod(mutationConfig),
+		action: createEndpointMethod(actionConfig),
+		internalQuery: createEndpointMethod(internalQueryConfig),
+		internalMutation: createEndpointMethod(internalMutationConfig),
+		internalAction: createEndpointMethod(internalActionConfig),
 	};
 };
 
@@ -531,15 +430,18 @@ interface AnyUnbuiltEndpoint {
 	readonly payloadFields: Schema.Struct.Fields;
 	readonly successSchema: Schema.Schema.AnyNoContext;
 	readonly errorSchema: Schema.Schema.AnyNoContext | undefined;
+	readonly middlewares: ReadonlyArray<RpcMiddleware.TagClassAny>;
 	readonly handler: (payload: never) => Effect.Effect<unknown, unknown, unknown>;
-	readonly build: (tag: string) => RpcEndpoint<string, Rpc.Any, unknown>;
+	readonly build: (tag: string, middlewareConfig: MiddlewareConfig | undefined) => RpcEndpoint<string, Rpc.Any, unknown>;
+	middleware<M extends RpcMiddleware.TagClassAny>(middleware: M): AnyUnbuiltEndpoint;
 }
 
 type BuiltEndpoint<K extends string, U> = U extends UnbuiltRpcEndpoint<
 	infer PayloadFields,
 	infer Success,
 	infer Error,
-	infer ConvexFnType
+	infer ConvexFnType,
+	infer _Middlewares
 >
 	? RpcEndpoint<K, Rpc.Rpc<K, Schema.Struct<PayloadFields>, Success, Error extends Schema.Schema.AnyNoContext ? Error : typeof Schema.Never, never>, ConvexFnType>
 	: never;
@@ -551,22 +453,84 @@ type BuiltEndpoints<T extends Record<string, AnyUnbuiltEndpoint>> = {
 const isUnbuilt = (value: unknown): value is AnyUnbuiltEndpoint =>
 	typeof value === "object" && value !== null && "__unbuilt" in value && (value as { __unbuilt: unknown }).__unbuilt === true;
 
+type ExtractMiddlewares<T extends Record<string, AnyUnbuiltEndpoint>> = T[keyof T]["middlewares"][number];
+
+type ExtractMiddlewareProvides<T extends RpcMiddleware.TagClassAny> = T extends {
+	readonly provides: Context.Tag<infer Id, infer _S>;
+}
+	? Id
+	: never;
+
+type ExtractAllMiddlewareProvides<T extends Record<string, AnyUnbuiltEndpoint>> = ExtractMiddlewareProvides<ExtractMiddlewares<T>>;
+
+export interface RpcModuleOptions<Services> {
+	readonly middlewares?: 
+		| Layer.Layer<Services, unknown, never>
+		| ReadonlyArray<MiddlewareImplementation>
+		| {
+			readonly implementations?: ReadonlyArray<MiddlewareImplementation>;
+			readonly layer?: Layer.Layer<Services, unknown, never>;
+		};
+}
+
+const normalizeMiddlewareOptions = <Services>(
+	options: RpcModuleOptions<Services>["middlewares"],
+): MiddlewareConfig | undefined => {
+	if (!options) {
+		return undefined;
+	}
+
+	if (Array.isArray(options)) {
+		return {
+			implementations: options,
+			staticLayer: undefined,
+		};
+	}
+
+	if ("_tag" in options && options._tag === "MiddlewareImplementation") {
+		return {
+			implementations: [options as MiddlewareImplementation],
+			staticLayer: undefined,
+		};
+	}
+
+	if (Layer.isLayer(options)) {
+		return {
+			implementations: [],
+			staticLayer: options as Layer.Layer<unknown, unknown, never>,
+		};
+	}
+
+	const cfg = options as {
+		readonly implementations?: ReadonlyArray<MiddlewareImplementation>;
+		readonly layer?: Layer.Layer<Services, unknown, never>;
+	};
+	
+	return {
+		implementations: cfg.implementations ?? [],
+		staticLayer: cfg.layer as Layer.Layer<unknown, unknown, never> | undefined,
+	};
+};
+
 export function makeRpcModule<
 	const T extends Record<string, AnyUnbuiltEndpoint>,
 >(
 	unbuiltEndpoints: T,
+	options?: RpcModuleOptions<ExtractAllMiddlewareProvides<T>>,
 ): RpcModuleBase<BuiltEndpoints<T>> & { readonly [K in keyof T]: BuiltEndpoint<K & string, T[K]> } {
 	const rpcs = {} as Record<string, Rpc.Any>;
 	const handlers = {} as Record<string, unknown>;
 	const rpcList: Array<Rpc.Any> = [];
 	const builtEndpoints = {} as Record<string, RpcEndpoint<string, Rpc.Any, unknown>>;
 
+	const middlewareConfig = normalizeMiddlewareOptions(options?.middlewares);
+
 	for (const key of Object.keys(unbuiltEndpoints)) {
 		const unbuilt = unbuiltEndpoints[key]!;
 		if (!isUnbuilt(unbuilt)) {
 			throw new Error(`Expected unbuilt endpoint for key "${key}"`);
 		}
-		const endpoint = unbuilt.build(key);
+		const endpoint = unbuilt.build(key, middlewareConfig);
 		builtEndpoints[key] = endpoint;
 		rpcs[key] = endpoint.rpc;
 		handlers[key] = endpoint.fn;
@@ -584,132 +548,4 @@ export function makeRpcModule<
 	return Object.assign(module, builtEndpoints) as RpcModuleBase<Built> & { readonly [K in keyof T]: BuiltEndpoint<K & string, T[K]> };
 }
 
-export { RpcMiddleware };
-
-export type Handler<Tag extends string> = Rpc.Handler<Tag>;
-
-export type ToHandler<R extends Rpc.Any> = Rpc.ToHandler<R>;
-
-export const exitSchema = <R extends Rpc.Any>(rpc: R): Schema.Schema<Rpc.Exit<R>, Rpc.ExitEncoded<R>, Rpc.Context<R>> => {
-	return Rpc.exitSchema(rpc);
-};
-
-export const WrapperTypeId = Rpc.WrapperTypeId;
-export type WrapperTypeId = Rpc.WrapperTypeId;
-
-export type Wrapper<A> = Rpc.Wrapper<A>;
-
-export const isWrapper = Rpc.isWrapper;
-
-export const wrap = Rpc.wrap;
-
-export const fork = Rpc.fork;
-
-export const uninterruptible = Rpc.uninterruptible;
-
-export type HandlersFrom<R extends Rpc.Any> = RpcGroup.HandlersFrom<R>;
-
-export type HandlersContext<R extends Rpc.Any, Handlers> = RpcGroup.HandlersContext<R, Handlers>;
-
-export interface ConfectRpcGroup<R extends Rpc.Any> {
-	readonly group: RpcGroup.RpcGroup<R>;
-	
-	merge<const Groups extends ReadonlyArray<ConfectRpcGroup<Rpc.Any>>>(
-		...groups: Groups
-	): ConfectRpcGroup<R | ExtractRpcs<Groups[number]>>;
-	
-	middleware<M extends RpcMiddleware.TagClassAny>(middleware: M): ConfectRpcGroup<Rpc.AddMiddleware<R, M>>;
-	
-	prefix<const Prefix extends string>(prefix: Prefix): ConfectRpcGroup<Rpc.Prefixed<R, Prefix>>;
-	
-	toLayer<
-		Handlers extends HandlersFrom<R>,
-		EX = never,
-		RX = never,
-	>(
-		build: Handlers | Effect.Effect<Handlers, EX, RX>,
-	): Layer.Layer<ToHandler<R>, EX, Exclude<RX, import("effect/Scope").Scope> | HandlersContext<R, Handlers>>;
-	
-	toHandlersContext<
-		Handlers extends HandlersFrom<R>,
-		EX = never,
-		RX = never,
-	>(
-		build: Handlers | Effect.Effect<Handlers, EX, RX>,
-	): Effect.Effect<Context.Context<ToHandler<R>>, EX, RX | HandlersContext<R, Handlers>>;
-	
-	accessHandler<const Tag extends R["_tag"]>(
-		tag: Tag,
-	): Effect.Effect<
-		(payload: Rpc.Payload<Extract<R, { readonly _tag: Tag }>>, headers: import("@effect/platform/Headers").Headers) => Rpc.ResultFrom<Extract<R, { readonly _tag: Tag }>, never>,
-		never,
-		Handler<Tag>
-	>;
-	
-	annotate<I, S>(tag: Context.Tag<I, S>, value: S): ConfectRpcGroup<R>;
-	
-	annotateContext<I>(context: Context.Context<I>): ConfectRpcGroup<R>;
-}
-
-type ExtractRpcs<G> = G extends ConfectRpcGroup<infer R> ? R : never;
-
-const makeConfectRpcGroup = <R extends Rpc.Any>(group: RpcGroup.RpcGroup<R>): ConfectRpcGroup<R> => {
-	return {
-		group,
-		
-		merge<const Groups extends ReadonlyArray<ConfectRpcGroup<Rpc.Any>>>(
-			...groups: Groups
-		): ConfectRpcGroup<R | ExtractRpcs<Groups[number]>> {
-			const merged = group.merge(...groups.map((g) => g.group));
-			return makeConfectRpcGroup(merged) as ConfectRpcGroup<R | ExtractRpcs<Groups[number]>>;
-		},
-		
-		middleware<M extends RpcMiddleware.TagClassAny>(middleware: M): ConfectRpcGroup<Rpc.AddMiddleware<R, M>> {
-			return makeConfectRpcGroup(group.middleware(middleware));
-		},
-		
-		prefix<const Prefix extends string>(prefix: Prefix): ConfectRpcGroup<Rpc.Prefixed<R, Prefix>> {
-			return makeConfectRpcGroup(group.prefix(prefix));
-		},
-		
-		toLayer<
-			Handlers extends HandlersFrom<R>,
-			EX = never,
-			RX = never,
-		>(
-			build: Handlers | Effect.Effect<Handlers, EX, RX>,
-		) {
-			return group.toLayer(build as Handlers | Effect.Effect<Handlers, EX, RX>);
-		},
-		
-		toHandlersContext<
-			Handlers extends HandlersFrom<R>,
-			EX = never,
-			RX = never,
-		>(
-			build: Handlers | Effect.Effect<Handlers, EX, RX>,
-		) {
-			return group.toHandlersContext(build as Handlers | Effect.Effect<Handlers, EX, RX>);
-		},
-		
-		accessHandler<const Tag extends R["_tag"]>(
-			tag: Tag,
-		) {
-			return group.accessHandler(tag);
-		},
-		
-		annotate<I, S>(tag: Context.Tag<I, S>, value: S): ConfectRpcGroup<R> {
-			return makeConfectRpcGroup(group.annotate(tag, value));
-		},
-		
-		annotateContext<I>(context: Context.Context<I>): ConfectRpcGroup<R> {
-			return makeConfectRpcGroup(group.annotateContext(context));
-		},
-	};
-};
-
-export const makeGroup = <const Rpcs extends ReadonlyArray<Rpc.Any>>(
-	...rpcs: Rpcs
-): ConfectRpcGroup<Rpcs[number]> => {
-	return makeConfectRpcGroup(RpcGroup.make(...rpcs));
-};
+export const exitSchema = Rpc.exitSchema;

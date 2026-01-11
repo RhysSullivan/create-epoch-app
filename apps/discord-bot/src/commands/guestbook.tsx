@@ -21,7 +21,9 @@ type GuestbookEntry = {
 
 export function GuestbookCommand() {
 	const entriesResult = useAtomValue(guestbookClient.list.subscription({}));
-	const [, triggerAdd] = useAtom(guestbookClient.add.mutate);
+	const [, triggerAdd] = useAtom(guestbookClient.add.mutate, {
+		mode: "promiseExit",
+	});
 	const [isAdding, setIsAdding] = useState(false);
 
 	if (Result.isInitial(entriesResult)) {
@@ -111,7 +113,7 @@ export function GuestbookCommand() {
 
 						setIsAdding(true);
 						try {
-							triggerAdd({ name, message });
+							const result = await triggerAdd({ name, message });
 							await interaction.reply({
 								content: `Thanks for signing, ${name}!`,
 								flags: ["Ephemeral"],

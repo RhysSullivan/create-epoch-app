@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Effect, Schema, Context } from "effect";
+import { Effect, Schema, Context, Layer } from "effect";
 import { Rpc, RpcMiddleware } from "@effect/rpc";
 import {
 	createRpcFactory,
@@ -9,7 +9,6 @@ import {
 	uninterruptible,
 	isWrapper,
 	wrap,
-	makeGroup,
 	type ExitEncoded,
 } from "./server";
 import { defineSchema, defineTable } from "../schema";
@@ -479,167 +478,167 @@ describe("RPC Server", () => {
 			},
 		) {}
 
-		it("provides service from middleware", async () => {
-			const factory = createRpcFactory({
-				schema: testSchema,
-				middlewares: [
-					{
-						tag: AuthMiddleware,
-						impl: AuthMiddleware.of(() =>
-							Effect.succeed({ id: "user-123", name: "Test User" }),
-						),
-					},
-				],
-			});
+	it("provides service from middleware via Layer", async () => {
+		const factory = createRpcFactory({ schema: testSchema });
 
-			const module = makeRpcModule({
-				whoami: factory.query({ success: Schema.String }, () =>
-					Effect.gen(function* () {
-						const user = yield* CurrentUser;
-						return `Hello, ${user.name}!`;
-					}),
-				),
-			});
+		const CurrentUserLive = Layer.succeed(
+			CurrentUser,
+			{ id: "user-123", name: "Test User" },
+		);
 
-			const ctx = createMockCtx();
-			const handler = getHandler(module.handlers.whoami);
-			const result = await handler(ctx, {});
-
-			const success = assertSuccess(result);
-			expect(success.value).toBe("Hello, Test User!");
-		});
-
-		it("middleware receives payload", async () => {
-			let receivedPayload: unknown = null;
-
-			const factory = createRpcFactory({
-				schema: testSchema,
-				middlewares: [
-					{
-						tag: AuthMiddleware,
-						impl: AuthMiddleware.of((options) => {
-							receivedPayload = options.payload;
-							return Effect.succeed({ id: "user-123", name: "Test User" });
+		const module = makeRpcModule(
+			{
+				whoami: factory
+					.query({ success: Schema.String }, () =>
+						Effect.gen(function* () {
+							const user = yield* CurrentUser;
+							return `Hello, ${user.name}!`;
 						}),
-					},
-				],
-			});
+					)
+					.middleware(AuthMiddleware),
+			},
+			{ middlewares: CurrentUserLive },
+		);
 
-			const module = makeRpcModule({
-				test: factory.query(
-					{ payload: { itemId: Schema.String }, success: Schema.Void },
-					() => Effect.void,
-				),
-			});
+		const ctx = createMockCtx();
+		const handler = getHandler(module.handlers.whoami);
+		const result = await handler(ctx, {});
 
-			const ctx = createMockCtx();
-			const handler = getHandler(module.handlers.test);
-			await handler(ctx, { itemId: "item-456" });
+		const success = assertSuccess(result);
+		expect(success.value).toBe("Hello, Test User!");
+	});
 
-			expect(receivedPayload).toEqual({ itemId: "item-456" });
-		});
+	it("handler can access payload and middleware services", async () => {
+		let receivedItemId: string | null = null;
 
-		it("middleware failure is encoded correctly", async () => {
-			class AuthError extends Schema.TaggedError<AuthError>()("AuthError", {
-				reason: Schema.String,
-			}) {}
+		const factory = createRpcFactory({ schema: testSchema });
 
-			class FailingAuthMiddleware extends RpcMiddleware.Tag<FailingAuthMiddleware>()(
-				"FailingAuthMiddleware",
-				{
-					provides: CurrentUser,
-					failure: AuthError,
-				},
-			) {}
+		const CurrentUserLive = Layer.succeed(
+			CurrentUser,
+			{ id: "user-123", name: "Test User" },
+		);
 
-			const factory = createRpcFactory({
-				schema: testSchema,
-				middlewares: [
-					{
-						tag: FailingAuthMiddleware,
-						impl: FailingAuthMiddleware.of(() =>
-							Effect.fail(new AuthError({ reason: "Invalid token" })),
-						),
-					},
-				],
-			});
-
-			const module = makeRpcModule({
-				protected: factory.query({ success: Schema.String, error: AuthError }, () =>
-					Effect.succeed("secret"),
-				),
-			});
-
-			const ctx = createMockCtx();
-			const handler = getHandler(module.handlers.protected);
-			const result = await handler(ctx, {});
-
-			const failure = assertFailure(result);
-			expect(failure.cause).toMatchObject({
-				_tag: "Fail",
-				error: { _tag: "AuthError", reason: "Invalid token" },
-			});
-		});
-
-		it("multiple middlewares are applied in order", async () => {
-			const executionOrder: Array<string> = [];
-
-			class Logger extends Context.Tag("Logger")<Logger, { log: (msg: string) => void }>() {}
-
-			class LoggerMiddleware extends RpcMiddleware.Tag<LoggerMiddleware>()(
-				"LoggerMiddleware",
-				{
-					provides: Logger,
-				},
-			) {}
-
-			const factory = createRpcFactory({
-				schema: testSchema,
-				middlewares: [
-					{
-						tag: AuthMiddleware,
-						impl: AuthMiddleware.of(() => {
-							executionOrder.push("auth");
-							return Effect.succeed({ id: "user-123", name: "Test User" });
+		const module = makeRpcModule(
+			{
+				test: factory
+					.query(
+						{ payload: { itemId: Schema.String }, success: Schema.String },
+						(args) => Effect.gen(function* () {
+							receivedItemId = args.itemId;
+							const user = yield* CurrentUser;
+							return `${user.name} accessed ${args.itemId}`;
 						}),
-					},
-					{
-						tag: LoggerMiddleware,
-						impl: LoggerMiddleware.of(() => {
-							executionOrder.push("logger");
-							return Effect.succeed({ log: (msg: string) => executionOrder.push(`log:${msg}`) });
+					)
+					.middleware(AuthMiddleware),
+			},
+			{ middlewares: CurrentUserLive },
+		);
+
+		const ctx = createMockCtx();
+		const handler = getHandler(module.handlers.test);
+		const result = await handler(ctx, { itemId: "item-456" });
+
+		const success = assertSuccess(result);
+		expect(receivedItemId).toEqual("item-456");
+		expect(success.value).toBe("Test User accessed item-456");
+	});
+
+	it("layer failure is encoded correctly", async () => {
+		class AuthError extends Schema.TaggedError<AuthError>()("AuthError", {
+			reason: Schema.String,
+		}) {}
+
+		class FailingAuthMiddleware extends RpcMiddleware.Tag<FailingAuthMiddleware>()(
+			"FailingAuthMiddleware",
+			{
+				provides: CurrentUser,
+				failure: AuthError,
+			},
+		) {}
+
+		const factory = createRpcFactory({ schema: testSchema });
+
+		const FailingAuthLive = Layer.fail(new AuthError({ reason: "Invalid token" }));
+
+		const module = makeRpcModule(
+			{
+				protected: factory
+					.query({ success: Schema.String, error: AuthError }, () =>
+						Effect.gen(function* () {
+							yield* CurrentUser;
+							return "secret";
 						}),
-					},
-				],
-			});
+					)
+					.middleware(FailingAuthMiddleware),
+			},
+			{ middlewares: FailingAuthLive },
+		);
 
-			const module = makeRpcModule({
-				test: factory.query({ success: Schema.String }, () =>
-					Effect.gen(function* () {
-						const user = yield* CurrentUser;
-						const logger = yield* Logger;
-						logger.log("accessed");
-						return user.name;
-					}),
-				),
-			});
+		const ctx = createMockCtx();
+		const handler = getHandler(module.handlers.protected);
+		const result = await handler(ctx, {});
 
-			const ctx = createMockCtx();
-			const handler = getHandler(module.handlers.test);
-			const result = await handler(ctx, {});
-
-			const success = assertSuccess(result);
-			expect(success.value).toBe("Test User");
-			expect(executionOrder).toContain("auth");
-			expect(executionOrder).toContain("logger");
-			expect(executionOrder).toContain("log:accessed");
+		const failure = assertFailure(result);
+		expect(failure.cause).toMatchObject({
+			_tag: "Fail",
+			error: { _tag: "AuthError", reason: "Invalid token" },
 		});
+	});
+
+	it("multiple services are provided via merged Layers", async () => {
+		const executionOrder: Array<string> = [];
+
+		class Logger extends Context.Tag("Logger")<Logger, { log: (msg: string) => void }>() {}
+
+		class LoggerMiddleware extends RpcMiddleware.Tag<LoggerMiddleware>()(
+			"LoggerMiddleware",
+			{
+				provides: Logger,
+			},
+		) {}
+
+		const factory = createRpcFactory({ schema: testSchema });
+
+		const CurrentUserLive = Layer.succeed(
+			CurrentUser,
+			{ id: "user-123", name: "Test User" },
+		);
+
+		const LoggerLive = Layer.succeed(
+			Logger,
+			{ log: (msg: string) => executionOrder.push(`log:${msg}`) },
+		);
+
+		const ServicesLive = Layer.mergeAll(CurrentUserLive, LoggerLive);
+
+		const module = makeRpcModule(
+			{
+				test: factory
+					.query({ success: Schema.String }, () =>
+						Effect.gen(function* () {
+							const user = yield* CurrentUser;
+							const logger = yield* Logger;
+							logger.log("accessed");
+							return user.name;
+						}),
+					)
+					.middleware(AuthMiddleware)
+					.middleware(LoggerMiddleware),
+			},
+			{ middlewares: ServicesLive },
+		);
+
+		const ctx = createMockCtx();
+		const handler = getHandler(module.handlers.test);
+		const result = await handler(ctx, {});
+
+		const success = assertSuccess(result);
+		expect(success.value).toBe("Test User");
+		expect(executionOrder).toContain("log:accessed");
+	});
 
 		it("works without any middleware", async () => {
-			const factory = createRpcFactory({
-				schema: testSchema,
-				middlewares: [],
-			});
+			const factory = createRpcFactory({ schema: testSchema });
 
 			const module = makeRpcModule({
 				simple: factory.query({ success: Schema.Number }, () =>
@@ -901,86 +900,329 @@ describe("RPC Server", () => {
 			});
 		});
 
-		describe("makeGroup", () => {
-			it("creates a ConfectRpcGroup from RPCs", () => {
-				const rpc1 = Rpc.make("GetUser", {
-					payload: { id: Schema.String },
-					success: Schema.String,
-				});
-				const rpc2 = Rpc.make("CreateUser", {
-					payload: { name: Schema.String },
-					success: Schema.String,
-				});
+	});
 
-				const group = makeGroup(rpc1, rpc2);
-				
-				expect(group.group).toBeDefined();
-				expect(group.group.requests.has("GetUser")).toBe(true);
-				expect(group.group.requests.has("CreateUser")).toBe(true);
+	describe("middleware chaining on individual RPCs", () => {
+		it("allows chaining .middleware() on individual endpoints", () => {
+			class AuthMiddleware extends RpcMiddleware.Tag<AuthMiddleware>()(
+				"AuthMiddleware",
+				{},
+			) {}
+
+			class LoggingMiddleware extends RpcMiddleware.Tag<LoggingMiddleware>()(
+				"LoggingMiddleware",
+				{},
+			) {}
+
+			const factory = createRpcFactory({ schema: testSchema });
+
+			const endpoint = factory
+				.query({ success: Schema.String }, () => Effect.succeed("hello"))
+				.middleware(AuthMiddleware)
+				.middleware(LoggingMiddleware);
+
+			expect(endpoint.__unbuilt).toBe(true);
+			expect(endpoint.middlewares).toHaveLength(2);
+			expect(endpoint.middlewares[0]).toBe(AuthMiddleware);
+			expect(endpoint.middlewares[1]).toBe(LoggingMiddleware);
+		});
+	});
+
+	describe("per-request middleware execution", () => {
+		class CurrentUser extends Context.Tag("CurrentUser")<
+			CurrentUser,
+			{ id: string; name: string }
+		>() {}
+
+		class AuthMiddleware extends RpcMiddleware.Tag<AuthMiddleware>()(
+			"AuthMiddleware",
+			{
+				provides: CurrentUser,
+			},
+		) {}
+
+		it("executes middleware function per request", async () => {
+			const { middleware } = await import("./server");
+			const factory = createRpcFactory({ schema: testSchema });
+			let callCount = 0;
+
+			const authImpl = middleware(AuthMiddleware, (options) => {
+				callCount++;
+				return Effect.succeed({ id: `user-${callCount}`, name: `User ${callCount}` });
 			});
 
-			it("prefix adds a prefix to all RPC tags", () => {
-				const rpc = Rpc.make("List", { success: Schema.Void });
-				const group = makeGroup(rpc);
-				const prefixed = group.prefix("Users/");
-				
-				expect(prefixed.group.requests.has("Users/List")).toBe(true);
-				expect(prefixed.group.requests.has("List")).toBe(false);
+			const module = makeRpcModule(
+				{
+					whoami: factory
+						.query({ success: Schema.String }, () =>
+							Effect.gen(function* () {
+								const user = yield* CurrentUser;
+								return user.name;
+							}),
+						)
+						.middleware(AuthMiddleware),
+				},
+				{ middlewares: [authImpl] },
+			);
+
+			const ctx = createMockCtx();
+			const handler = getHandler(module.handlers.whoami);
+
+			const result1 = await handler(ctx, {});
+			const success1 = assertSuccess(result1);
+			expect(success1.value).toBe("User 1");
+
+			const result2 = await handler(ctx, {});
+			const success2 = assertSuccess(result2);
+			expect(success2.value).toBe("User 2");
+
+			expect(callCount).toBe(2);
+		});
+
+		it("middleware receives payload", async () => {
+			const { middleware } = await import("./server");
+			const factory = createRpcFactory({ schema: testSchema });
+			let receivedPayload: unknown = null;
+
+			const authImpl = middleware(AuthMiddleware, (options) => {
+				receivedPayload = options.payload;
+				return Effect.succeed({ id: "user-1", name: "Test" });
 			});
 
-			it("merge combines multiple groups", () => {
-				const userRpc = Rpc.make("GetUser", { success: Schema.String });
-				const postRpc = Rpc.make("GetPost", { success: Schema.String });
-				
-				const userGroup = makeGroup(userRpc);
-				const postGroup = makeGroup(postRpc);
-				
-				const merged = userGroup.group.merge(postGroup.group);
-				
-				expect(merged.requests.has("GetUser")).toBe(true);
-				expect(merged.requests.has("GetPost")).toBe(true);
+			const module = makeRpcModule(
+				{
+					test: factory
+						.query(
+							{ payload: { itemId: Schema.String }, success: Schema.String },
+							(args) =>
+								Effect.gen(function* () {
+									const user = yield* CurrentUser;
+									return `${user.name} accessed ${args.itemId}`;
+								}),
+						)
+						.middleware(AuthMiddleware),
+				},
+				{ middlewares: [authImpl] },
+			);
+
+			const ctx = createMockCtx();
+			const handler = getHandler(module.handlers.test);
+			await handler(ctx, { itemId: "item-456" });
+
+			expect(receivedPayload).toEqual({ itemId: "item-456" });
+		});
+
+		it("middleware receives rpc info", async () => {
+			const { middleware } = await import("./server");
+			const factory = createRpcFactory({ schema: testSchema });
+			let receivedRpcInfo: unknown = null;
+
+			const authImpl = middleware(AuthMiddleware, (options) => {
+				receivedRpcInfo = options.rpc;
+				return Effect.succeed({ id: "user-1", name: "Test" });
 			});
 
-			it("middleware applies to all RPCs in group", () => {
-				class TestMiddleware extends RpcMiddleware.Tag<TestMiddleware>()(
-					"TestMiddleware",
-					{},
-				) {}
+			const module = makeRpcModule(
+				{
+					myEndpoint: factory
+						.query({ success: Schema.String }, () =>
+							Effect.gen(function* () {
+								yield* CurrentUser;
+								return "ok";
+							}),
+						)
+						.middleware(AuthMiddleware),
+				},
+				{ middlewares: [authImpl] },
+			);
 
-				const rpc = Rpc.make("Test", { success: Schema.Void });
-				const group = makeGroup(rpc);
-				const withMiddleware = group.middleware(TestMiddleware);
-				
-				expect(withMiddleware.group).toBeDefined();
+			const ctx = createMockCtx();
+			const handler = getHandler(module.handlers.myEndpoint);
+			await handler(ctx, {});
+
+			expect(receivedRpcInfo).toEqual({ tag: "myEndpoint", kind: "query" });
+		});
+
+		it("middleware receives convex context", async () => {
+			const { middleware } = await import("./server");
+			const factory = createRpcFactory({ schema: testSchema });
+			let receivedCtx: unknown = null;
+
+			const authImpl = middleware(AuthMiddleware, (options) => {
+				receivedCtx = options.ctx;
+				return Effect.succeed({ id: "user-1", name: "Test" });
 			});
 
-			it("annotate adds annotations to the group", () => {
-				const TestAnnotation = Context.GenericTag<string>("TestAnnotation");
-				const rpc = Rpc.make("Test", { success: Schema.Void });
-				
-				const group = makeGroup(rpc);
-				const annotated = group.annotate(TestAnnotation, "test-value");
-				
-				expect(annotated.group.annotations.unsafeMap.has(TestAnnotation.key)).toBe(true);
+			const module = makeRpcModule(
+				{
+					test: factory
+						.query({ success: Schema.String }, () =>
+							Effect.gen(function* () {
+								yield* CurrentUser;
+								return "ok";
+							}),
+						)
+						.middleware(AuthMiddleware),
+				},
+				{ middlewares: [authImpl] },
+			);
+
+			const mockCtx = createMockCtx();
+			const handler = getHandler(module.handlers.test);
+			await handler(mockCtx, {});
+
+			expect(receivedCtx).toBe(mockCtx);
+		});
+
+		it("middleware can fail with typed error", async () => {
+			const { middleware } = await import("./server");
+
+			class AuthError extends Schema.TaggedError<AuthError>()("AuthError", {
+				reason: Schema.String,
+			}) {}
+
+			class FailingAuthMiddleware extends RpcMiddleware.Tag<FailingAuthMiddleware>()(
+				"FailingAuthMiddleware",
+				{
+					provides: CurrentUser,
+					failure: AuthError,
+				},
+			) {}
+
+			const factory = createRpcFactory({ schema: testSchema });
+
+			const authImpl = middleware(FailingAuthMiddleware, () =>
+				Effect.fail(new AuthError({ reason: "Invalid token" })),
+			);
+
+			const module = makeRpcModule(
+				{
+					protected: factory
+						.query({ success: Schema.String, error: AuthError }, () =>
+							Effect.gen(function* () {
+								yield* CurrentUser;
+								return "secret";
+							}),
+						)
+						.middleware(FailingAuthMiddleware),
+				},
+				{ middlewares: [authImpl] },
+			);
+
+			const ctx = createMockCtx();
+			const handler = getHandler(module.handlers.protected);
+			const result = await handler(ctx, {});
+
+			const failure = assertFailure(result);
+			expect(failure.cause).toMatchObject({
+				_tag: "Fail",
+				error: { _tag: "AuthError", reason: "Invalid token" },
+			});
+		});
+
+		it("multiple per-request middlewares execute in order", async () => {
+			const { middleware } = await import("./server");
+			const executionOrder: Array<string> = [];
+
+			class Logger extends Context.Tag("Logger")<Logger, { log: (msg: string) => void }>() {}
+
+			class LoggerMiddleware extends RpcMiddleware.Tag<LoggerMiddleware>()(
+				"LoggerMiddleware",
+				{ provides: Logger },
+			) {}
+
+			const factory = createRpcFactory({ schema: testSchema });
+
+			const authImpl = middleware(AuthMiddleware, () => {
+				executionOrder.push("auth");
+				return Effect.succeed({ id: "user-1", name: "Test" });
 			});
 
-			it("annotateContext adds context to the group", () => {
-				const Tag1 = Context.GenericTag<string>("Tag1");
-				const Tag2 = Context.GenericTag<number>("Tag2");
-				
-				const rpc = Rpc.make("Test", { success: Schema.Void });
-				const group = makeGroup(rpc);
-				
-				const ctx = Context.empty().pipe(
-					Context.add(Tag1, "hello"),
-					Context.add(Tag2, 42),
-				);
-				
-				const annotated = group.annotateContext(ctx);
-				
-				expect(annotated.group.annotations.unsafeMap.has(Tag1.key)).toBe(true);
-				expect(annotated.group.annotations.unsafeMap.has(Tag2.key)).toBe(true);
+			const loggerImpl = middleware(LoggerMiddleware, () => {
+				executionOrder.push("logger");
+				return Effect.succeed({ log: (msg: string) => executionOrder.push(`log:${msg}`) });
 			});
+
+			const module = makeRpcModule(
+				{
+					test: factory
+						.query({ success: Schema.String }, () =>
+							Effect.gen(function* () {
+								const user = yield* CurrentUser;
+								const logger = yield* Logger;
+								logger.log("handler");
+								return user.name;
+							}),
+						)
+						.middleware(AuthMiddleware)
+						.middleware(LoggerMiddleware),
+				},
+				{ middlewares: [authImpl, loggerImpl] },
+			);
+
+			const ctx = createMockCtx();
+			const handler = getHandler(module.handlers.test);
+			await handler(ctx, {});
+
+			expect(executionOrder).toEqual(["auth", "logger", "log:handler"]);
+		});
+
+		it("supports mixed static layer and per-request middleware", async () => {
+			const { middleware } = await import("./server");
+
+			class StaticService extends Context.Tag("StaticService")<
+				StaticService,
+				{ value: string }
+			>() {}
+
+			class StaticMiddleware extends RpcMiddleware.Tag<StaticMiddleware>()(
+				"StaticMiddleware",
+				{ provides: StaticService },
+			) {}
+
+			const factory = createRpcFactory({ schema: testSchema });
+			let perRequestCallCount = 0;
+
+			const authImpl = middleware(AuthMiddleware, () => {
+				perRequestCallCount++;
+				return Effect.succeed({ id: `user-${perRequestCallCount}`, name: `User ${perRequestCallCount}` });
+			});
+
+			const staticLayer = Layer.succeed(StaticService, { value: "static-value" });
+
+			const module = makeRpcModule(
+				{
+					test: factory
+						.query({ success: Schema.String }, () =>
+							Effect.gen(function* () {
+								const user = yield* CurrentUser;
+								const static_ = yield* StaticService;
+								return `${user.name}: ${static_.value}`;
+							}),
+						)
+						.middleware(AuthMiddleware)
+						.middleware(StaticMiddleware),
+				},
+				{
+					middlewares: {
+						implementations: [authImpl],
+						layer: staticLayer,
+					},
+				},
+			);
+
+			const ctx = createMockCtx();
+			const handler = getHandler(module.handlers.test);
+
+			const result1 = await handler(ctx, {});
+			const success1 = assertSuccess(result1);
+			expect(success1.value).toBe("User 1: static-value");
+
+			const result2 = await handler(ctx, {});
+			const success2 = assertSuccess(result2);
+			expect(success2.value).toBe("User 2: static-value");
+
+			expect(perRequestCallCount).toBe(2);
 		});
 	});
 });

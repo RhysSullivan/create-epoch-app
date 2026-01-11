@@ -1,39 +1,16 @@
 "use client";
 
-import { Result, useAtom } from "@effect-atom/atom-react";
-import { Option } from "effect";
 import { Button } from "@packages/ui/components/button";
+import { usePaginatedAtom } from "@packages/ui/hooks/use-paginated-atom";
 import { guestbookClient } from "@packages/ui/rpc/guestbook";
 
 const PAGE_SIZE = 3;
 
 const paginatedAtom = guestbookClient.listPaginated.paginated(PAGE_SIZE);
 
-type Entry = {
-	_id: string;
-	_creationTime: number;
-	name: string;
-	message: string;
-};
-
 export function PaginationDemo() {
-	const [pullResult, loadMore] = useAtom(paginatedAtom);
-
-	const items: readonly Entry[] = Result.isSuccess(pullResult)
-		? Option.map(Result.value(pullResult), (v) => v.items).pipe(
-				Option.getOrElse(() => [] as const),
-			)
-		: [];
-
-	const done = Result.isSuccess(pullResult)
-		? Option.map(Result.value(pullResult), (v) => v.done).pipe(
-				Option.getOrElse(() => true),
-			)
-		: true;
-
-	const isLoading = Result.isWaiting(pullResult);
-	const isInitial = Result.isInitial(pullResult);
-	const hasMore = !done;
+	const { items, hasMore, isLoading, isInitial, isError, loadMore } =
+		usePaginatedAtom(paginatedAtom);
 
 	return (
 		<div className="w-full max-w-md rounded-lg border p-6">
@@ -52,7 +29,7 @@ export function PaginationDemo() {
 						Start Loading
 					</Button>
 				</div>
-			) : Result.isFailure(pullResult) ? (
+			) : isError ? (
 				<p className="text-sm text-red-500">Error loading entries</p>
 			) : (
 				<div className="space-y-4">

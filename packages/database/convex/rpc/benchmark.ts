@@ -19,7 +19,10 @@ const Entry = Schema.Struct({
 
 export const rpcModule = makeRpcModule({
 	list: factory.query(
-		{ payload: { nonce: Schema.String }, success: Schema.Array(Entry) },
+		{
+			payload: { nonce: Schema.String },
+			success: Schema.Array(Entry),
+		},
 		() =>
 			Effect.gen(function* () {
 				const ctx = yield* ConfectQueryCtx;
@@ -42,7 +45,7 @@ export const rpcModule = makeRpcModule({
 					name: args.name,
 					message: args.message,
 				});
-				return id;
+				return String(id);
 			}),
 	),
 });

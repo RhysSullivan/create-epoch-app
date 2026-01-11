@@ -10,6 +10,7 @@
 
 import type * as confect from "../confect.js";
 import type * as http from "../http.js";
+import type * as rpc_admin from "../rpc/admin.js";
 import type * as rpc_benchmark from "../rpc/benchmark.js";
 import type * as rpc_guestbook from "../rpc/guestbook.js";
 import type * as shared_betterAuth from "../shared/betterAuth.js";
@@ -24,6 +25,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   confect: typeof confect;
   http: typeof http;
+  "rpc/admin": typeof rpc_admin;
   "rpc/benchmark": typeof rpc_benchmark;
   "rpc/guestbook": typeof rpc_guestbook;
   "shared/betterAuth": typeof shared_betterAuth;
